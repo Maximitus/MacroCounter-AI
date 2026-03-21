@@ -1,9 +1,15 @@
 type Env = {
-  ASSETS: {fetch(input: Request | URL | string, init?: RequestInit): Promise<Response>};
+  /** Present in production and most previews; Vite dev can omit it briefly. */
+  ASSETS?: {fetch(input: Request | URL | string, init?: RequestInit): Promise<Response>};
   GEMINI_API_KEY?: string;
 };
 
-const CHAT_PATH = '/macrocounter/api/chat';
+/** POST targets for chat (must match `run_worker_first` coverage). */
+function isChatPost(pathname: string, method: string): boolean {
+  if (method !== 'POST') return false;
+  const p = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return p === '/macrocounter/api/chat' || p === '/api/chat';
+}
 
 async function handleChatPost(request: Request, env: Env): Promise<Response> {
   const apiKey = env.GEMINI_API_KEY;
@@ -37,9 +43,13 @@ async function handleChatPost(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === CHAT_PATH && request.method === 'POST') {
+    if (isChatPost(url.pathname, request.method)) {
       return handleChatPost(request, env);
     }
-    return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    // Avoid `fetch(request)` here — Miniflare/workerd can throw internal errors (recursive routing).
+    return new Response('Asset handler unavailable', {status: 503});
   },
 };

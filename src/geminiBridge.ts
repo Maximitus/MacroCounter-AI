@@ -21,10 +21,18 @@ export async function generateContentJson(params: {
     }),
   });
 
-  const data = (await res.json()) as {
+  const raw = await res.text();
+  let data: {
     error?: {message?: string};
     candidates?: {content?: {parts?: {text?: string}[]}}[];
   };
+  try {
+    data = raw ? (JSON.parse(raw) as typeof data) : {};
+  } catch {
+    throw new Error(
+      `Chat API ${res.status}: ${raw.trim() ? raw.slice(0, 200) : 'empty or non-JSON body (e.g. 405 from static host — check Worker routing)'}`,
+    );
+  }
 
   if (!res.ok || data.error) {
     throw new Error(data.error?.message ?? JSON.stringify(data));

@@ -11,7 +11,8 @@
   },
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/macrocounter/api/*"]
+    // Worker runs first for every request so POST /macrocounter/api/chat is not handled as a static file (405).
+    "run_worker_first": true
   },
   "compatibility_flags": [
     "nodejs_compat"

@@ -89,7 +89,12 @@ function geminiChatDevMiddlewarePlugin(): Plugin {
           } catch {
             /* keep raw */
           }
-          if (pathname !== CHAT_PATH && pathname !== `${CHAT_PATH}/`) {
+          const isChat =
+            pathname === CHAT_PATH ||
+            pathname === `${CHAT_PATH}/` ||
+            pathname === '/api/chat' ||
+            pathname === '/api/chat/';
+          if (!isChat) {
             next();
             return;
           }
@@ -162,9 +167,27 @@ function geminiChatDevMiddlewarePlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({command}) => ({
   base: '/macrocounter/',
-  plugins: [geminiChatDevMiddlewarePlugin(), react(), tailwindcss(), cloudflare()],
+  plugins: [
+    geminiChatDevMiddlewarePlugin(),
+    react(),
+    tailwindcss(),
+    cloudflare(
+      command === 'serve'
+        ? {
+            // Dev: only run Worker first for API paths. `run_worker_first: true` + missing ASSETS
+            // caused errors; `fetch(request)` fallback causes workerd "internal error".
+            config: (cfg) => ({
+              assets: {
+                ...cfg.assets,
+                run_worker_first: ['/macrocounter/api/*', '/api/*'],
+              },
+            }),
+          }
+        : {},
+    ),
+  ],
   resolve: {
     alias: {
       '@': rootDir,
@@ -175,4 +198,4 @@ export default defineConfig({
     // Do not modify - file watching is disabled to prevent flickering during agent edits.
     hmr: process.env.DISABLE_HMR !== 'true',
   },
-});
+}));

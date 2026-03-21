@@ -309,6 +309,8 @@ export default function App() {
           {mode === 'ai' ? (
             <div className="space-y-5">
                 <input
+                  id="meal-photo-camera"
+                  name="meal_photo_camera"
                   type="file"
                   accept="image/*"
                   capture="environment"
@@ -317,6 +319,8 @@ export default function App() {
                   onChange={handleFileChange}
                 />
                 <input
+                  id="meal-photo-gallery"
+                  name="meal_photo_gallery"
                   type="file"
                   accept="image/*"
                   className="hidden"
@@ -366,6 +370,7 @@ export default function App() {
                 <div className="flex w-full min-w-0 flex-wrap gap-2 items-stretch">
                   <input
                     id="meal-description"
+                    name="meal_description"
                     type="text"
                     enterKeyHint="send"
                     autoComplete="off"
@@ -451,9 +456,13 @@ export default function App() {
                 <div className="space-y-4">
                   {Object.keys(manualMacros).map((key) => (
                     <div key={key} className="flex items-center gap-4">
-                      <label className="capitalize w-24 text-[var(--color-text-light)]">{key}</label>
-                      <input 
-                        type="number" 
+                      <label htmlFor={`manual-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
+                        {key}
+                      </label>
+                      <input
+                        id={`manual-macro-${key}`}
+                        name={`manual_macro_${key}`}
+                        type="number"
                         value={manualMacros[key as keyof typeof manualMacros]}
                         onChange={(e) => setManualMacros(prev => ({ ...prev, [key]: Number(e.target.value) }))}
                         className="flex-1 p-3 rounded-xl bg-[#1e2327] border border-neutral-600 focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-white"
@@ -549,17 +558,49 @@ export default function App() {
             </div>
             {modalMode === 'manual' && (
               <div className="space-y-4">
-                <input type="text" placeholder="Name" value={favName} onChange={(e) => setFavName(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
+                <input
+                  id="favorite-manual-name"
+                  name="favorite_manual_name"
+                  type="text"
+                  placeholder="Name"
+                  value={favName}
+                  onChange={(e) => setFavName(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                />
                 {Object.keys(manualMacros).map((key) => (
-                  <input key={key} type="number" placeholder={key} onChange={(e) => setManualMacros(prev => ({ ...prev, [key]: Number(e.target.value) }))} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
+                  <input
+                    key={key}
+                    id={`favorite-manual-macro-${key}`}
+                    name={`favorite_manual_macro_${key}`}
+                    type="number"
+                    placeholder={key}
+                    onChange={(e) => setManualMacros(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                    className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                  />
                 ))}
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={() => saveFavorite(favName, manualMacros)}>Save</button>
               </div>
             )}
             {modalMode === 'ai' && (
               <div className="space-y-4">
-                <input type="text" placeholder="Name" value={favName} onChange={(e) => setFavName(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
-                <input type="text" placeholder="Description" value={textDescription} onChange={(e) => setTextDescription(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
+                <input
+                  id="favorite-ai-name"
+                  name="favorite_ai_name"
+                  type="text"
+                  placeholder="Name"
+                  value={favName}
+                  onChange={(e) => setFavName(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                />
+                <input
+                  id="favorite-ai-description"
+                  name="favorite_ai_description"
+                  type="text"
+                  placeholder="Description"
+                  value={textDescription}
+                  onChange={(e) => setTextDescription(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                />
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={async () => {
                   setLoading(true);
                   try {
@@ -583,34 +624,49 @@ export default function App() {
             )}
             {modalMode === 'picture' && (
               <div className="space-y-4">
-                <input type="text" placeholder="Name" value={favName} onChange={(e) => setFavName(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
-                <input type="file" accept="image/*" onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setLoading(true);
-                  const reader = new FileReader();
-                  reader.onloadend = async () => {
-                    const base64String = (reader.result as string).split(',')[1];
-                    try {
-                      const text = await generateContentJson({
-                        parts: [
-                          {inlineData: {mimeType: file.type, data: base64String}},
-                          {
-                            text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
-                          },
-                        ],
-                      });
-                      const result = JSON.parse(text);
-                      saveFavorite(favName, normalizeAiMacros(result));
-                    } catch (error) {
-                      console.error('Favorite AI picture:', error);
-                      toastAiConfigError(error, 'Could not analyze image.');
-                    } finally {
-                      setLoading(false);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
+                <input
+                  id="favorite-picture-name"
+                  name="favorite_picture_name"
+                  type="text"
+                  placeholder="Name"
+                  value={favName}
+                  onChange={(e) => setFavName(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                />
+                <input
+                  id="favorite-picture-file"
+                  name="favorite_picture_file"
+                  type="file"
+                  accept="image/*"
+                  className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setLoading(true);
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                      const base64String = (reader.result as string).split(',')[1];
+                      try {
+                        const text = await generateContentJson({
+                          parts: [
+                            {inlineData: {mimeType: file.type, data: base64String}},
+                            {
+                              text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
+                            },
+                          ],
+                        });
+                        const result = JSON.parse(text);
+                        saveFavorite(favName, normalizeAiMacros(result));
+                      } catch (error) {
+                        console.error('Favorite AI picture:', error);
+                        toastAiConfigError(error, 'Could not analyze image.');
+                      } finally {
+                        setLoading(false);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
               </div>
             )}
             <button className="mt-4 text-[var(--color-text-light)]" onClick={() => setIsModalOpen(false)}>Cancel</button>
@@ -626,6 +682,8 @@ export default function App() {
                 <div key={item.id} className="p-3 bg-[#1e2327] rounded-xl border border-neutral-600 flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <input
+                      id={`pending-meal-name-${item.id}`}
+                      name={`pending_meal_name_${index}`}
                       value={item.name}
                       onChange={(e) => setPendingMeal(prev => prev ? prev.map((i, idx) => idx === index ? {...i, name: e.target.value} : i) : null)}
                       className="flex-1 p-2 rounded-lg bg-[#151a1e] border border-neutral-600 text-white text-sm"
@@ -644,6 +702,8 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2 w-full">
                     <input
+                      id={`pending-meal-amt-${item.id}`}
+                      name={`pending_meal_amt_${index}`}
                       value={item.portion.split(' ')[0] || ''}
                       onChange={(e) => {
                         let amount = e.target.value.replace(/[^0-9.]/g, '');
@@ -657,6 +717,8 @@ export default function App() {
                       placeholder="Amt"
                     />
                     <select
+                      id={`pending-meal-unit-${item.id}`}
+                      name={`pending_meal_unit_${index}`}
                       value={item.portion.split(' ')[1] || 'g'}
                       onChange={(e) => setPendingMeal(prev => prev ? prev.map((i, idx) => idx === index ? {...i, portion: `${i.portion.split(' ')[0] || '1'} ${e.target.value}`} : i) : null)}
                       className="p-2 rounded-lg bg-[#151a1e] border border-neutral-600 text-white text-sm w-20"
@@ -721,7 +783,9 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <textarea 
+                    <textarea
+                      id="goals-ai-prompt"
+                      name="goals_ai_prompt"
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
@@ -759,9 +823,13 @@ export default function App() {
               </div>
               {Object.keys(goals).map((key) => (
                 <div key={key} className="flex items-center gap-4">
-                  <label className="capitalize w-24 text-[var(--color-text-light)]">{key}</label>
-                  <input 
-                    type="number" 
+                  <label htmlFor={`goal-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
+                    {key}
+                  </label>
+                  <input
+                    id={`goal-${key}`}
+                    name={`goal_${key}`}
+                    type="number"
                     value={goals[key as keyof typeof goals]}
                     onChange={(e) => setGoals(prev => ({ ...prev, [key]: Number(e.target.value) }))}
                     className="flex-1 p-3 rounded-xl bg-[#1e2327] border border-neutral-600 focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-white"

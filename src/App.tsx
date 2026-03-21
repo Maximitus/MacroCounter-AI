@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { Camera, Upload, Edit3, Loader2, Check, Plus, MoreVertical } from 'lucide-react';
+import { Camera, Edit3, Loader2, Check, Plus, MoreVertical, X, Images } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import { generateContentJson } from './geminiBridge';
@@ -52,6 +52,10 @@ export default function App() {
   const [modalMode, setModalMode] = useState<'manual' | 'ai' | 'picture'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     const lastDate = localStorage.getItem('lastUpdatedDate');
@@ -72,13 +76,13 @@ export default function App() {
   }, [macros, history, goals, favorites]);
 
   useEffect(() => {
-    if (isGoalsModalOpen || isModalOpen || pendingMeal) {
+    if (isGoalsModalOpen || isModalOpen || pendingMeal || cameraOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
-  }, [isGoalsModalOpen, isModalOpen, pendingMeal]);
+  }, [isGoalsModalOpen, isModalOpen, pendingMeal, cameraOpen]);
 
   const addMeal = (name: string, macrosToAdd: typeof manualMacros) => {
     setMacros(prev => ({
@@ -128,21 +132,23 @@ export default function App() {
     }
   };
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+  };
 
+  const processImageFile = (file: File) => {
     setLoading(true);
-    
-    // Convert file to base64
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = (reader.result as string).split(',')[1];
-      
       try {
         const text = await generateContentJson({
           parts: [
-            {inlineData: {mimeType: file.type, data: base64String}},
+            { inlineData: { mimeType: file.type, data: base64String } },
             {
               text: 'Analyze this food image. Return a list of food items identified in the image, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]',
             },
@@ -157,12 +163,84 @@ export default function App() {
         }));
         setPendingMeal(itemsWithIds);
       } catch (error) {
-        console.error("Error analyzing food:", error);
+        console.error('Error analyzing food:', error);
       } finally {
         setLoading(false);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    processImageFile(file);
+  };
+
+  const openDeviceCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      stopCamera();
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+    } catch {
+      fileInputRef.current?.click();
+    }
+  };
+
+  useEffect(() => {
+    if (!cameraOpen || !cameraVideoRef.current || !cameraStreamRef.current) return;
+    const video = cameraVideoRef.current;
+    video.srcObject = cameraStreamRef.current;
+    video.play().catch(() => {});
+  }, [cameraOpen]);
+
+  useEffect(() => {
+    return () => {
+      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const closeCameraModal = () => {
+    stopCamera();
+    setCameraOpen(false);
+  };
+
+  const captureFromCamera = () => {
+    const video = cameraVideoRef.current;
+    if (!video) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+        closeCameraModal();
+        processImageFile(file);
+      },
+      'image/jpeg',
+      0.92,
+    );
   };
 
   const saveFavorite = (name: string, macros: typeof manualMacros) => {
@@ -214,39 +292,81 @@ export default function App() {
           </div>
 
           {mode === 'ai' ? (
-            <div className="space-y-6">
-              <div className="flex flex-col items-center justify-center gap-4 border-2 border-dashed border-neutral-600 p-8 rounded-2xl">
-                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+            <div className="space-y-5">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={galleryInputRef}
+                  onChange={handleFileChange}
+                />
+              <div className="space-y-3">
+                <div className="px-0.5">
+                  <h3 className="text-base font-semibold text-white">Photo</h3>
+                  <p className="mt-0.5 text-sm leading-snug text-[var(--color-text-light)]">
+                    Snap your meal or pick one you already have.
+                  </p>
+                </div>
                 {loading ? (
-                  <Loader2 className="w-12 h-12 text-[var(--color-accent)] animate-spin" />
+                  <div className="flex min-h-[7.5rem] items-center justify-center rounded-2xl bg-[#1e2327] border border-neutral-700">
+                    <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" />
+                  </div>
                 ) : (
-                  <>
-                    <Upload className="w-12 h-12 text-[var(--color-text-light)]" />
-                    <p className="text-[var(--color-text-light)]">Upload or take a photo of your food</p>
-                    <button 
-                      className="bg-[var(--color-accent)] text-white px-8 py-4 rounded-full font-medium hover:bg-[#d66e20] transition flex items-center"
-                      onClick={() => fileInputRef.current?.click()}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                    <button
+                      type="button"
+                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl bg-[var(--color-accent)] px-4 py-3.5 text-left font-semibold text-white shadow-sm transition active:opacity-90 sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
+                      onClick={() => void openDeviceCamera()}
                     >
-                      <Camera className="w-5 h-5 mr-2" />
-                      Take Photo
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 sm:h-12 sm:w-12">
+                        <Camera className="h-6 w-6" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1 sm:text-center">Take photo</span>
                     </button>
-                  </>
+                    <button
+                      type="button"
+                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl border border-neutral-600 bg-[#1e2327] px-4 py-3.5 text-left font-semibold text-white transition active:bg-neutral-700 sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
+                      onClick={() => galleryInputRef.current?.click()}
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-800 sm:h-12 sm:w-12">
+                        <Images className="h-6 w-6 text-[var(--color-text-light)]" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1 sm:text-center">Choose from photos</span>
+                    </button>
+                  </div>
                 )}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                <input 
-                  type="text" 
-                  placeholder="Describe your meal..." 
-                  value={textDescription} 
-                  onChange={(e) => setTextDescription(e.target.value)} 
-                  className="min-w-0 w-full flex-1 p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" 
-                />
-                <button 
-                  className="w-full shrink-0 bg-neutral-700 text-white px-6 py-3 rounded-xl sm:w-auto" 
-                  onClick={handleTextAnalysis}
-                >
-                  Analyze
-                </button>
+              <div className="space-y-2 border-t border-neutral-700 pt-5">
+                <label htmlFor="meal-description" className="block text-sm font-medium text-white">
+                  Or describe it
+                </label>
+                <div className="flex w-full min-w-0 flex-wrap gap-2 items-stretch">
+                  <input
+                    id="meal-description"
+                    type="text"
+                    enterKeyHint="send"
+                    autoComplete="off"
+                    placeholder="e.g. chicken salad, large"
+                    value={textDescription}
+                    onChange={(e) => setTextDescription(e.target.value)}
+                    className="min-w-0 max-w-full grow shrink basis-[min(100%,12rem)] box-border rounded-xl border border-neutral-600 bg-[#1e2327] px-3 py-3.5 text-base text-white placeholder:text-neutral-500"
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex min-h-[3rem] shrink-0 grow-0 touch-manipulation items-center justify-center rounded-xl bg-neutral-700 px-5 py-3 text-base font-medium text-white active:bg-neutral-600 sm:min-h-0"
+                    onClick={handleTextAnalysis}
+                  >
+                    Analyze
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -362,6 +482,46 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              className="rounded-full bg-neutral-800 p-2 text-white hover:bg-neutral-700"
+              onClick={closeCameraModal}
+              aria-label="Close camera"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+            <video
+              ref={cameraVideoRef}
+              className="max-h-[min(70vh,100%)] w-full max-w-lg rounded-xl object-cover"
+              autoPlay
+              playsInline
+              muted
+            />
+            <div className="flex w-full max-w-lg flex-wrap gap-2">
+              <button
+                type="button"
+                className="flex-1 min-w-[8rem] rounded-xl bg-[var(--color-accent)] py-4 font-medium text-white hover:bg-[#d66e20]"
+                onClick={captureFromCamera}
+              >
+                Capture
+              </button>
+              <button
+                type="button"
+                className="flex-1 min-w-[8rem] rounded-xl bg-neutral-700 py-4 font-medium text-white hover:bg-neutral-600"
+                onClick={closeCameraModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 [&::-webkit-scrollbar]:hidden">

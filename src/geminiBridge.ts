@@ -23,7 +23,7 @@ export async function generateContentJson(params: {
 
   const raw = await res.text();
   let data: {
-    error?: {message?: string};
+    error?: {message?: string; hint?: string};
     candidates?: {content?: {parts?: {text?: string}[]}}[];
   };
   try {
@@ -35,7 +35,9 @@ export async function generateContentJson(params: {
   }
 
   if (!res.ok || data.error) {
-    throw new Error(data.error?.message ?? JSON.stringify(data));
+    const err = data.error;
+    const parts = [err?.message, err?.hint].filter(Boolean);
+    throw new Error(parts.length ? parts.join(' — ') : JSON.stringify(data));
   }
 
   const text = data.candidates?.[0]?.content?.parts?.find((p) => p.text != null)?.text;

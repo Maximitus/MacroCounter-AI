@@ -14,7 +14,16 @@ function isChatPost(pathname: string, method: string): boolean {
 async function handleChatPost(request: Request, env: Env): Promise<Response> {
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) {
-    return Response.json({error: {message: 'Missing GEMINI_API_KEY'}}, {status: 500});
+    return Response.json(
+      {
+        error: {
+          message: 'Missing GEMINI_API_KEY',
+          hint:
+            'In Cloudflare: Workers & Pages → this Worker → Settings → Variables and Secrets → add encrypted variable GEMINI_API_KEY. CLI: npx wrangler secret put GEMINI_API_KEY',
+        },
+      },
+      {status: 500},
+    );
   }
 
   let body: Record<string, unknown>;

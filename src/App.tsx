@@ -10,6 +10,18 @@ import toast, { Toaster } from 'react-hot-toast';
 import { generateContentJson } from './geminiBridge';
 import { formatMacroAmount, normalizeAiMacros } from './macroUtils';
 
+function toastAiConfigError(error: unknown, fallback: string) {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (msg.includes('GEMINI_API_KEY') || msg.includes('Missing GEMINI')) {
+    toast.error(
+      'AI is not configured for this site yet. Add the GEMINI_API_KEY secret to the Cloudflare Worker (Dashboard → Workers & Pages → your worker → Settings → Variables and Secrets).',
+      {duration: 9000},
+    );
+    return;
+  }
+  toast.error(fallback);
+}
+
 interface FoodItem {
   id: string;
   name: string;
@@ -128,6 +140,7 @@ export default function App() {
       setTextDescription('');
     } catch (error) {
       console.error("Error analyzing food description:", error);
+      toastAiConfigError(error, "Could not analyze description.");
     } finally {
       setLoading(false);
     }
@@ -165,6 +178,7 @@ export default function App() {
         setPendingMeal(itemsWithIds);
       } catch (error) {
         console.error('Error analyzing food:', error);
+        toastAiConfigError(error, 'Could not analyze image.');
       } finally {
         setLoading(false);
       }
@@ -548,16 +562,22 @@ export default function App() {
                 <input type="text" placeholder="Description" value={textDescription} onChange={(e) => setTextDescription(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={async () => {
                   setLoading(true);
-                  const text = await generateContentJson({
-                    parts: [
-                      {
-                        text: `Analyze this food description: "${textDescription}". Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}`,
-                      },
-                    ],
-                  });
-                  const result = JSON.parse(text);
-                  saveFavorite(favName, normalizeAiMacros(result));
-                  setLoading(false);
+                  try {
+                    const text = await generateContentJson({
+                      parts: [
+                        {
+                          text: `Analyze this food description: "${textDescription}". Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}`,
+                        },
+                      ],
+                    });
+                    const result = JSON.parse(text);
+                    saveFavorite(favName, normalizeAiMacros(result));
+                  } catch (error) {
+                    console.error('Favorite AI description:', error);
+                    toastAiConfigError(error, 'Could not analyze favorite.');
+                  } finally {
+                    setLoading(false);
+                  }
                 }}>Save</button>
               </div>
             )}
@@ -571,17 +591,23 @@ export default function App() {
                   const reader = new FileReader();
                   reader.onloadend = async () => {
                     const base64String = (reader.result as string).split(',')[1];
-                    const text = await generateContentJson({
-                      parts: [
-                        {inlineData: {mimeType: file.type, data: base64String}},
-                        {
-                          text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
-                        },
-                      ],
-                    });
-                    const result = JSON.parse(text);
-                    saveFavorite(favName, normalizeAiMacros(result));
-                    setLoading(false);
+                    try {
+                      const text = await generateContentJson({
+                        parts: [
+                          {inlineData: {mimeType: file.type, data: base64String}},
+                          {
+                            text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
+                          },
+                        ],
+                      });
+                      const result = JSON.parse(text);
+                      saveFavorite(favName, normalizeAiMacros(result));
+                    } catch (error) {
+                      console.error('Favorite AI picture:', error);
+                      toastAiConfigError(error, 'Could not analyze image.');
+                    } finally {
+                      setLoading(false);
+                    }
                   };
                   reader.readAsDataURL(file);
                 }} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
@@ -720,7 +746,7 @@ export default function App() {
                           toast.success("Macro goals updated via AI");
                         } catch (error) {
                           console.error("Error generating goals:", error);
-                          toast.error("Error generating goals");
+                          toastAiConfigError(error, 'Could not generate goals.');
                         } finally {
                           setGoalsAiLoading(false);
                         }

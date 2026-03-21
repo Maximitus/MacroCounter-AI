@@ -31,6 +31,7 @@ export default function App() {
   });
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [goalsAiLoading, setGoalsAiLoading] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
@@ -687,38 +688,48 @@ export default function App() {
             <div className="space-y-4 [&::-webkit-scrollbar]:hidden">
               <div className="bg-[#1e2327] p-4 rounded-xl border border-neutral-600">
                 <h3 className="text-sm font-semibold text-white mb-2">AI Goal Setting</h3>
-                <textarea 
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
-                  className="w-full p-3 rounded-xl bg-[#151a1e] border border-neutral-600 text-white mb-2"
-                  rows={2}
-                />
-                <button 
-                  className="w-full bg-neutral-700 text-white py-2 rounded-full font-medium hover:bg-neutral-600 transition text-sm"
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      const text = await generateContentJson({
-                        parts: [
-                          {
-                            text: `Act as a nutritionist. Based on this user info: "${aiPrompt}", recommend daily macro goals (calories, protein, carbs, fat). Return as JSON: {calories: number, protein: number, carbs: number, fat: number}`,
-                          },
-                        ],
-                      });
-                      const result = JSON.parse(text);
-                      setGoals(normalizeAiMacros(result));
-                      toast.success("Macro goals updated via AI");
-                    } catch (error) {
-                      console.error("Error generating goals:", error);
-                      toast.error("Error generating goals");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                >
-                  {loading ? 'Generating...' : 'Generate Goals with AI'}
-                </button>
+                {goalsAiLoading ? (
+                  <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-xl bg-[#151a1e] border border-neutral-600">
+                    <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
+                    <span className="text-sm text-[var(--color-text-light)]">Generating goals…</span>
+                  </div>
+                ) : (
+                  <>
+                    <textarea 
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
+                      className="w-full p-3 rounded-xl bg-[#151a1e] border border-neutral-600 text-white mb-2"
+                      rows={2}
+                    />
+                    <button 
+                      type="button"
+                      className="w-full bg-neutral-700 text-white py-2 rounded-full font-medium hover:bg-neutral-600 transition text-sm"
+                      onClick={async () => {
+                        setGoalsAiLoading(true);
+                        try {
+                          const text = await generateContentJson({
+                            parts: [
+                              {
+                                text: `Act as a nutritionist. Based on this user info: "${aiPrompt}", recommend daily macro goals (calories, protein, carbs, fat). Return as JSON: {calories: number, protein: number, carbs: number, fat: number}`,
+                              },
+                            ],
+                          });
+                          const result = JSON.parse(text);
+                          setGoals(normalizeAiMacros(result));
+                          toast.success("Macro goals updated via AI");
+                        } catch (error) {
+                          console.error("Error generating goals:", error);
+                          toast.error("Error generating goals");
+                        } finally {
+                          setGoalsAiLoading(false);
+                        }
+                      }}
+                    >
+                      Generate Goals with AI
+                    </button>
+                  </>
+                )}
               </div>
               {Object.keys(goals).map((key) => (
                 <div key={key} className="flex items-center gap-4">

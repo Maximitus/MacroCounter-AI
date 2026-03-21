@@ -1,12 +1,17 @@
 {
+  // Production: GEMINI_API_KEY must be a Worker secret (never commit; .dev.vars is gitignored).
+  // After deploy: npx wrangler secret put GEMINI_API_KEY
+  // Or: Dashboard → Workers & Pages → this worker → Settings → Variables and Secrets → Add (Encrypted).
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "macrocounter-ai",
+  "main": "./worker/index.ts",
   "compatibility_date": "2025-09-27",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/macrocounter/api/*"]
   },
   "compatibility_flags": [
     "nodejs_compat"

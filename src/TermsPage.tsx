@@ -11,7 +11,7 @@ import { COPYRIGHT_OWNER, getCopyrightYear } from './siteMeta.ts';
 export default function TermsPage() {
   const year = getCopyrightYear();
   return (
-    <div className="min-h-screen bg-[var(--color-bg-dark)] text-white font-sans flex flex-col">
+    <div className="min-h-screen blueprint-bg text-white font-sans flex flex-col">
       <header className="p-6 bg-[var(--color-card-dark)] shadow-sm border-b border-neutral-700 flex items-center gap-4">
         <Link
           to="/"

@@ -47,7 +47,7 @@ export function DisclaimerGate({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-[var(--color-bg-dark)] text-white flex items-center justify-center">
+      <div className="min-h-screen blueprint-bg text-white flex items-center justify-center">
         <p className="text-sm text-[var(--color-text-light)]">Loading…</p>
       </div>
     );
@@ -110,7 +110,7 @@ function DisclaimerModal({
               type="checkbox"
               checked={agreed}
               onChange={(e) => onAgreedChange(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-500 bg-[#1e2327] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-500 bg-[var(--color-surface)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
             />
             <span>
               I have read and understood this notice. I agree to use Macro Counter only on these
@@ -121,7 +121,7 @@ function DisclaimerModal({
             type="button"
             disabled={!agreed}
             onClick={onAccept}
-            className="w-full rounded-full bg-[var(--color-accent)] py-3.5 font-medium text-white transition hover:bg-[#d66e20] disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-full bg-[var(--color-accent)] py-3.5 font-medium text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Continue
           </button>

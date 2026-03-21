@@ -9,7 +9,7 @@
     "preview": "npm run build && wrangler dev",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "npm run build && node scripts/stripDevVarsFromDist.mjs && wrangler deploy"
+    "deploy": "npm run build && node scripts/stripDevVarsFromDist.mjs && wrangler deploy --config dist/macrocounter_ai/wrangler.json"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

@@ -10,6 +10,8 @@
     "enabled": true
   },
   "assets": {
+    // Required with run_worker_first — without this, env.ASSETS is missing and the site returns 503.
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     // Worker runs first for every request so POST /macrocounter/api/chat is not handled as a static file (405).
     "run_worker_first": true

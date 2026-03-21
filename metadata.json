@@ -1,0 +1,5 @@
+{
+  "name": "MacroCounter AI",
+  "description": "A mobile-optimized macro counter that uses AI to analyze food from photos.",
+  "requestFramePermissions": ["camera"]
+}

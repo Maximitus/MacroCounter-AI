@@ -253,7 +253,7 @@ export default function App() {
     <div className="min-h-screen bg-[var(--color-bg-dark)] text-white font-sans">
       <Toaster />
       <header className="p-6 bg-[var(--color-card-dark)] shadow-sm border-b border-neutral-700">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-accent)]">MacroCounter AI</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-accent)]">Macro Counter</h1>
       </header>
 
       <main className="p-6 space-y-8">

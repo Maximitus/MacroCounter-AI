@@ -5,21 +5,10 @@
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { Camera, Upload, Edit3, Loader2, Check, Plus, MoreVertical } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
-
-// Initialize AI
-let aiClient: GoogleGenAI | null = null;
-const getAi = () => {
-  if (!aiClient) {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not set");
-    }
-    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-  return aiClient;
-};
+import { generateContentJson } from './geminiBridge';
+import { formatMacroAmount, normalizeAiMacros } from './macroUtils';
 
 interface FoodItem {
   id: string;
@@ -117,15 +106,19 @@ export default function App() {
     if (!textDescription) return;
     setLoading(true);
     try {
-      const response = await getAi().models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze this food description: "${textDescription}". Return a list of food items identified in the description, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]`,
-        config: {
-          responseMimeType: "application/json",
-        },
+      const text = await generateContentJson({
+        parts: [
+          {
+            text: `Analyze this food description: "${textDescription}". Return a list of food items identified in the description, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]`,
+          },
+        ],
       });
-      const result = JSON.parse(response.text!);
-      const itemsWithIds = result.map((item: any) => ({ ...item, id: Date.now().toString() + Math.random() }));
+      const result = JSON.parse(text);
+      const itemsWithIds = result.map((item: any) => ({
+        ...item,
+        ...normalizeAiMacros(item),
+        id: Date.now().toString() + Math.random(),
+      }));
       setPendingMeal(itemsWithIds);
       setTextDescription('');
     } catch (error) {
@@ -147,28 +140,21 @@ export default function App() {
       const base64String = (reader.result as string).split(',')[1];
       
       try {
-        const response = await getAi().models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: file.type,
-                  data: base64String,
-                },
-              },
-              {
-                text: "Analyze this food image. Return a list of food items identified in the image, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]",
-              },
-            ],
-          },
-          config: {
-            responseMimeType: "application/json",
-          },
+        const text = await generateContentJson({
+          parts: [
+            {inlineData: {mimeType: file.type, data: base64String}},
+            {
+              text: 'Analyze this food image. Return a list of food items identified in the image, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]',
+            },
+          ],
         });
-        
-        const result = JSON.parse(response.text!);
-        const itemsWithIds = result.map((item: any) => ({ ...item, id: Date.now().toString() + Math.random() }));
+
+        const result = JSON.parse(text);
+        const itemsWithIds = result.map((item: any) => ({
+          ...item,
+          ...normalizeAiMacros(item),
+          id: Date.now().toString() + Math.random(),
+        }));
         setPendingMeal(itemsWithIds);
       } catch (error) {
         console.error("Error analyzing food:", error);
@@ -247,16 +233,16 @@ export default function App() {
                   </>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <input 
                   type="text" 
                   placeholder="Describe your meal..." 
                   value={textDescription} 
                   onChange={(e) => setTextDescription(e.target.value)} 
-                  className="flex-1 p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" 
+                  className="min-w-0 w-full flex-1 p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" 
                 />
                 <button 
-                  className="bg-neutral-700 text-white px-6 rounded-xl" 
+                  className="w-full shrink-0 bg-neutral-700 text-white px-6 py-3 rounded-xl sm:w-auto" 
                   onClick={handleTextAnalysis}
                 >
                   Analyze
@@ -297,7 +283,7 @@ export default function App() {
                       >
                         <button className="flex-1 text-left" onClick={() => addMeal(fav.name, fav.macros)}>
                           <p className="font-bold text-white">{fav.name}</p>
-                          <p className="text-sm text-[var(--color-text-light)]">{fav.macros.calories} kcal, {fav.macros.protein}g P, {fav.macros.carbs}g C, {fav.macros.fat}g F</p>
+                          <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(fav.macros.calories)} kcal, {formatMacroAmount(fav.macros.protein)}g P, {formatMacroAmount(fav.macros.carbs)}g C, {formatMacroAmount(fav.macros.fat)}g F</p>
                         </button>
                         <div className="relative">
                           <button onClick={() => setOpenMenuId(openMenuId === `fav-${index}` ? null : `fav-${index}`)}>
@@ -322,7 +308,7 @@ export default function App() {
                       onClick={() => addMeal(meal.name, meal.macros)}
                     >
                       <p className="font-bold text-white">{meal.name}</p>
-                      <p className="text-sm text-[var(--color-text-light)]">{meal.macros.calories} kcal, {meal.macros.protein}g P, {meal.macros.carbs}g C, {meal.macros.fat}g F</p>
+                      <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P, {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F</p>
                     </button>
                   ))}
                 </div>
@@ -358,7 +344,7 @@ export default function App() {
               <div key={meal.id} className="flex justify-between items-center bg-[#1e2327] p-4 rounded-xl">
                 <div>
                   <p className="font-bold text-white">{meal.name}</p>
-                  <p className="text-sm text-[var(--color-text-light)]">{meal.macros.calories} kcal, {meal.macros.protein}g P, {meal.macros.carbs}g C, {meal.macros.fat}g F</p>
+                  <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P, {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F</p>
                 </div>
                 <div className="relative">
                   <button onClick={() => setOpenMenuId(openMenuId === meal.id ? null : meal.id)}>
@@ -401,13 +387,15 @@ export default function App() {
                 <input type="text" placeholder="Description" value={textDescription} onChange={(e) => setTextDescription(e.target.value)} className="w-full p-3 rounded-xl bg-[#1e2327] border border-neutral-600 text-white" />
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={async () => {
                   setLoading(true);
-                  const response = await getAi().models.generateContent({
-                    model: "gemini-3-flash-preview",
-                    contents: `Analyze this food description: "${textDescription}". Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}`,
-                    config: { responseMimeType: "application/json" },
+                  const text = await generateContentJson({
+                    parts: [
+                      {
+                        text: `Analyze this food description: "${textDescription}". Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}`,
+                      },
+                    ],
                   });
-                  const result = JSON.parse(response.text!);
-                  saveFavorite(favName, result);
+                  const result = JSON.parse(text);
+                  saveFavorite(favName, normalizeAiMacros(result));
                   setLoading(false);
                 }}>Save</button>
               </div>
@@ -422,18 +410,16 @@ export default function App() {
                   const reader = new FileReader();
                   reader.onloadend = async () => {
                     const base64String = (reader.result as string).split(',')[1];
-                    const response = await getAi().models.generateContent({
-                      model: "gemini-3-flash-preview",
-                      contents: {
-                        parts: [
-                          { inlineData: { mimeType: file.type, data: base64String } },
-                          { text: "Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}" },
-                        ],
-                      },
-                      config: { responseMimeType: "application/json" },
+                    const text = await generateContentJson({
+                      parts: [
+                        {inlineData: {mimeType: file.type, data: base64String}},
+                        {
+                          text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
+                        },
+                      ],
                     });
-                    const result = JSON.parse(response.text!);
-                    saveFavorite(favName, result);
+                    const result = JSON.parse(text);
+                    saveFavorite(favName, normalizeAiMacros(result));
                     setLoading(false);
                   };
                   reader.readAsDataURL(file);
@@ -506,12 +492,17 @@ export default function App() {
               <button 
                 className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full font-medium hover:bg-[#d66e20] transition"
                 onClick={() => {
-                  const totalMacros = pendingMeal.reduce((acc, item) => ({
-                    calories: acc.calories + item.calories,
-                    protein: acc.protein + item.protein,
-                    carbs: acc.carbs + item.carbs,
-                    fat: acc.fat + item.fat,
-                  }), {calories: 0, protein: 0, carbs: 0, fat: 0});
+                  const totalMacros = normalizeAiMacros(
+                    pendingMeal.reduce(
+                      (acc, item) => ({
+                        calories: acc.calories + item.calories,
+                        protein: acc.protein + item.protein,
+                        carbs: acc.carbs + item.carbs,
+                        fat: acc.fat + item.fat,
+                      }),
+                      {calories: 0, protein: 0, carbs: 0, fat: 0},
+                    ),
+                  );
                   const mealName = pendingMeal.map(i => i.name).join(', ');
                   addMeal(mealName, totalMacros);
                   setPendingMeal(null);
@@ -548,13 +539,15 @@ export default function App() {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      const response = await getAi().models.generateContent({
-                        model: "gemini-3-flash-preview",
-                        contents: `Act as a nutritionist. Based on this user info: "${aiPrompt}", recommend daily macro goals (calories, protein, carbs, fat). Return as JSON: {calories: number, protein: number, carbs: number, fat: number}`,
-                        config: { responseMimeType: "application/json" },
+                      const text = await generateContentJson({
+                        parts: [
+                          {
+                            text: `Act as a nutritionist. Based on this user info: "${aiPrompt}", recommend daily macro goals (calories, protein, carbs, fat). Return as JSON: {calories: number, protein: number, carbs: number, fat: number}`,
+                          },
+                        ],
                       });
-                      const result = JSON.parse(response.text!);
-                      setGoals(result);
+                      const result = JSON.parse(text);
+                      setGoals(normalizeAiMacros(result));
                       toast.success("Macro goals updated via AI");
                     } catch (error) {
                       console.error("Error generating goals:", error);

@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { Camera, Edit3, Loader2, Check, Plus, MoreVertical, X, Images } from 'lucide-react';
+import { Camera, Loader2, MoreVertical, X, Images } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import { generateContentJson } from './geminiBridge';
@@ -22,14 +22,32 @@ function toastAiConfigError(error: unknown, fallback: string) {
   toast.error(fallback);
 }
 
-interface FoodItem {
-  id: string;
-  name: string;
-  portion: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
+function summarizeAiMealItems(items: unknown): {
+  mealName: string;
+  macros: {calories: number; protein: number; carbs: number; fat: number};
+} | null {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const normalized = items.map((item: Record<string, unknown>) => ({
+    ...item,
+    ...normalizeAiMacros(item),
+  }));
+  const macros = normalizeAiMacros(
+    normalized.reduce(
+      (acc, item) => ({
+        calories: acc.calories + item.calories,
+        protein: acc.protein + item.protein,
+        carbs: acc.carbs + item.carbs,
+        fat: acc.fat + item.fat,
+      }),
+      {calories: 0, protein: 0, carbs: 0, fat: 0},
+    ),
+  );
+  const mealName =
+    normalized
+      .map((i) => String(i.name ?? '').trim())
+      .filter(Boolean)
+      .join(', ') || 'AI meal';
+  return {mealName, macros};
 }
 
 export default function App() {
@@ -61,7 +79,6 @@ export default function App() {
   });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pendingMeal, setPendingMeal] = useState<FoodItem[] | null>(null);
   const [modalMode, setModalMode] = useState<'manual' | 'ai' | 'picture'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,13 +106,13 @@ export default function App() {
   }, [macros, history, goals, favorites]);
 
   useEffect(() => {
-    if (isGoalsModalOpen || isModalOpen || pendingMeal || cameraOpen) {
+    if (isGoalsModalOpen || isModalOpen || cameraOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
-  }, [isGoalsModalOpen, isModalOpen, pendingMeal, cameraOpen]);
+  }, [isGoalsModalOpen, isModalOpen, cameraOpen]);
 
   const addMeal = (name: string, macrosToAdd: typeof manualMacros) => {
     setMacros(prev => ({
@@ -131,12 +148,12 @@ export default function App() {
         ],
       });
       const result = JSON.parse(text);
-      const itemsWithIds = result.map((item: any) => ({
-        ...item,
-        ...normalizeAiMacros(item),
-        id: Date.now().toString() + Math.random(),
-      }));
-      setPendingMeal(itemsWithIds);
+      const summary = summarizeAiMealItems(result);
+      if (!summary) {
+        toast.error('No food items could be identified.');
+        return;
+      }
+      addMeal(summary.mealName, summary.macros);
       setTextDescription('');
     } catch (error) {
       console.error("Error analyzing food description:", error);
@@ -170,12 +187,12 @@ export default function App() {
         });
 
         const result = JSON.parse(text);
-        const itemsWithIds = result.map((item: any) => ({
-          ...item,
-          ...normalizeAiMacros(item),
-          id: Date.now().toString() + Math.random(),
-        }));
-        setPendingMeal(itemsWithIds);
+        const summary = summarizeAiMealItems(result);
+        if (!summary) {
+          toast.error('No food items could be identified.');
+          return;
+        }
+        addMeal(summary.mealName, summary.macros);
       } catch (error) {
         console.error('Error analyzing food:', error);
         toastAiConfigError(error, 'Could not analyze image.');
@@ -670,102 +687,6 @@ export default function App() {
               </div>
             )}
             <button className="mt-4 text-[var(--color-text-light)]" onClick={() => setIsModalOpen(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
-      {pendingMeal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 overflow-x-hidden [&::-webkit-scrollbar]:hidden">
-          <div className="bg-[var(--color-card-dark)] p-6 rounded-2xl shadow-lg w-full max-w-md border border-neutral-700 [&::-webkit-scrollbar]:hidden">
-            <h2 className="text-lg font-semibold mb-4 text-white">Review Meal</h2>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-              {pendingMeal.map((item, index) => (
-                <div key={item.id} className="p-3 bg-[var(--color-surface)] rounded-xl border border-neutral-600 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      id={`pending-meal-name-${item.id}`}
-                      name={`pending_meal_name_${index}`}
-                      value={item.name}
-                      onChange={(e) => setPendingMeal(prev => prev ? prev.map((i, idx) => idx === index ? {...i, name: e.target.value} : i) : null)}
-                      className="flex-1 p-2 rounded-lg bg-[var(--color-surface-deep)] border border-neutral-600 text-white text-sm"
-                      placeholder="Food name"
-                    />
-                    <div className="relative">
-                      <button onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}>
-                        <MoreVertical className="text-white" />
-                      </button>
-                      {openMenuId === item.id && (
-                        <div className="absolute right-0 mt-2 bg-neutral-800 rounded-lg shadow-lg z-10 p-2 space-y-1">
-                          <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {setPendingMeal(prev => prev ? prev.filter((_, idx) => idx !== index) : null); setOpenMenuId(null);}}>Remove</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 w-full">
-                    <input
-                      id={`pending-meal-amt-${item.id}`}
-                      name={`pending_meal_amt_${index}`}
-                      value={item.portion.split(' ')[0] || ''}
-                      onChange={(e) => {
-                        let amount = e.target.value.replace(/[^0-9.]/g, '');
-                        if (amount.includes('.')) {
-                          const [integer, decimal] = amount.split('.');
-                          amount = `${integer}.${decimal.slice(0, 1)}`;
-                        }
-                        setPendingMeal(prev => prev ? prev.map((i, idx) => idx === index ? {...i, portion: `${amount} ${i.portion.split(' ')[1] || 'g'}`} : i) : null);
-                      }}
-                      className="flex-1 p-2 rounded-lg bg-[var(--color-surface-deep)] border border-neutral-600 text-white text-sm"
-                      placeholder="Amt"
-                    />
-                    <select
-                      id={`pending-meal-unit-${item.id}`}
-                      name={`pending_meal_unit_${index}`}
-                      value={item.portion.split(' ')[1] || 'g'}
-                      onChange={(e) => setPendingMeal(prev => prev ? prev.map((i, idx) => idx === index ? {...i, portion: `${i.portion.split(' ')[0] || '1'} ${e.target.value}`} : i) : null)}
-                      className="p-2 rounded-lg bg-[var(--color-surface-deep)] border border-neutral-600 text-white text-sm w-20"
-                    >
-                      <option value="g">g</option>
-                      <option value="oz">oz</option>
-                      <option value="ml">ml</option>
-                      <option value="cup">cup</option>
-                      <option value="pcs">pcs</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
-              <button 
-                className="w-full bg-neutral-700 text-white py-2 rounded-full font-medium hover:bg-neutral-600 transition text-sm"
-                onClick={() => setPendingMeal(prev => prev ? [...prev, {id: Date.now().toString(), name: 'New Item', portion: '1 g', calories: 0, protein: 0, carbs: 0, fat: 0}] : null)}
-              >
-                Add Item
-              </button>
-              <button 
-                className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full font-medium hover:bg-[var(--color-accent-hover)] transition"
-                onClick={() => {
-                  const totalMacros = normalizeAiMacros(
-                    pendingMeal.reduce(
-                      (acc, item) => ({
-                        calories: acc.calories + item.calories,
-                        protein: acc.protein + item.protein,
-                        carbs: acc.carbs + item.carbs,
-                        fat: acc.fat + item.fat,
-                      }),
-                      {calories: 0, protein: 0, carbs: 0, fat: 0},
-                    ),
-                  );
-                  const mealName = pendingMeal.map(i => i.name).join(', ');
-                  addMeal(mealName, totalMacros);
-                  setPendingMeal(null);
-                }}
-              >
-                Add to Log
-              </button>
-              <button 
-                className="w-full text-neutral-400 py-2 rounded-full font-medium hover:text-white transition text-sm"
-                onClick={() => setPendingMeal(null)}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -165,6 +165,22 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [editMealName, setEditMealName] = useState('');
+  const [editMealMacros, setEditMealMacros] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  });
+  const [editingFavoriteIndex, setEditingFavoriteIndex] = useState<number | null>(null);
+  const [editFavoriteName, setEditFavoriteName] = useState('');
+  const [editFavoriteMacros, setEditFavoriteMacros] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'manual' | 'ai' | 'picture'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -193,13 +209,13 @@ export default function App() {
   }, [macros, history, goals, favorites]);
 
   useEffect(() => {
-    if (isGoalsModalOpen || isModalOpen || cameraOpen) {
+    if (isGoalsModalOpen || isModalOpen || cameraOpen || editingMealId || editingFavoriteIndex !== null) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
-  }, [isGoalsModalOpen, isModalOpen, cameraOpen]);
+  }, [isGoalsModalOpen, isModalOpen, cameraOpen, editingMealId, editingFavoriteIndex]);
 
   type ManualMacroKey = keyof typeof manualMacros;
   const macroInputValue = (key: ManualMacroKey) =>
@@ -243,6 +259,73 @@ export default function App() {
     }));
     setHistory(prev => prev.filter(meal => meal.id !== id));
     toast.success("Meal removed from daily log");
+  };
+
+  const startEditMeal = (meal: {id: string; name: string; macros: typeof manualMacros}) => {
+    setEditingMealId(meal.id);
+    setEditMealName(meal.name);
+    setEditMealMacros({ ...meal.macros });
+    setOpenMenuId(null);
+  };
+
+  const handleEditMealMacroChange = (key: keyof typeof manualMacros, raw: string) => {
+    const sanitized = sanitizeMacroAmountRaw(raw);
+    setEditMealMacros((prev) => ({ ...prev, [key]: parseMacroAmountInput(sanitized) }));
+  };
+
+  const saveEditedMeal = () => {
+    if (!editingMealId) return;
+    const previousMeal = history.find((meal) => meal.id === editingMealId);
+    if (!previousMeal) return;
+    setHistory((prev) =>
+      prev.map((meal) =>
+        meal.id === editingMealId
+          ? {
+              ...meal,
+              name: editMealName.trim() || 'Meal',
+              macros: { ...editMealMacros },
+            }
+          : meal,
+      ),
+    );
+    setMacros((prev) => ({
+      calories: prev.calories - previousMeal.macros.calories + editMealMacros.calories,
+      protein: prev.protein - previousMeal.macros.protein + editMealMacros.protein,
+      carbs: prev.carbs - previousMeal.macros.carbs + editMealMacros.carbs,
+      fat: prev.fat - previousMeal.macros.fat + editMealMacros.fat,
+    }));
+    setEditingMealId(null);
+    toast.success('Meal updated');
+  };
+
+  const startEditFavorite = (index: number) => {
+    const favorite = favorites[index];
+    if (!favorite) return;
+    setEditingFavoriteIndex(index);
+    setEditFavoriteName(favorite.name);
+    setEditFavoriteMacros({ ...favorite.macros });
+    setOpenMenuId(null);
+  };
+
+  const handleEditFavoriteMacroChange = (key: keyof typeof manualMacros, raw: string) => {
+    const sanitized = sanitizeMacroAmountRaw(raw);
+    setEditFavoriteMacros((prev) => ({ ...prev, [key]: parseMacroAmountInput(sanitized) }));
+  };
+
+  const saveEditedFavorite = () => {
+    if (editingFavoriteIndex === null) return;
+    setFavorites((prev) =>
+      prev.map((favorite, index) =>
+        index === editingFavoriteIndex
+          ? {
+              name: editFavoriteName.trim() || 'Favorite',
+              macros: { ...editFavoriteMacros },
+            }
+          : favorite,
+      ),
+    );
+    setEditingFavoriteIndex(null);
+    toast.success('Favorite updated');
   };
 
   const handleTextAnalysis = async () => {
@@ -571,6 +654,7 @@ export default function App() {
                           </button>
                           {openMenuId === `fav-${index}` && (
                             <div className="absolute right-0 mt-2 rounded-lg border border-[#ff8800]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
+                              <button className="block w-full text-left text-blue-300 hover:text-blue-200 px-2 py-1" onClick={() => startEditFavorite(index)}>Edit</button>
                               <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {setFavorites(favorites.filter((_, i) => i !== index)); setOpenMenuId(null); toast.success("Favorite removed");}}>Remove</button>
                             </div>
                           )}
@@ -640,6 +724,7 @@ export default function App() {
                   </button>
                   {openMenuId === meal.id && (
                     <div className="absolute right-0 mt-2 rounded-lg border border-[#ff8800]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
+                      <button className="block w-full text-left text-blue-300 hover:text-blue-200 px-2 py-1" onClick={() => startEditMeal(meal)}>Edit</button>
                       <button className="block w-full text-left text-blue-400 hover:text-blue-300 px-2 py-1" onClick={() => {setFavorites([...favorites, {name: meal.name, macros: meal.macros}]); setOpenMenuId(null); toast.success("Added to favorites");}}>Favorite</button>
                       <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {removeMeal(meal.id, meal.macros); setOpenMenuId(null)}}>Remove</button>
                     </div>
@@ -819,6 +904,104 @@ export default function App() {
               </div>
             )}
             <button className="mt-4 text-[var(--color-text-light)]" onClick={() => setIsModalOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {editingMealId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
+          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Edit Meal</h2>
+            <div className="space-y-4">
+              <input
+                id="edit-meal-name"
+                name="edit_meal_name"
+                type="text"
+                placeholder="Meal name"
+                value={editMealName}
+                onChange={(e) => setEditMealName(e.target.value)}
+                className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+              />
+              {Object.keys(editMealMacros).map((key) => (
+                <div key={key} className="flex items-center gap-4">
+                  <label htmlFor={`edit-meal-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
+                    {key}
+                  </label>
+                  <input
+                    id={`edit-meal-macro-${key}`}
+                    name={`edit_meal_macro_${key}`}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={String(editMealMacros[key as keyof typeof editMealMacros])}
+                    onChange={(e) =>
+                      handleEditMealMacroChange(
+                        key as keyof typeof manualMacros,
+                        e.target.value,
+                      )
+                    }
+                    className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  />
+                </div>
+              ))}
+              <button
+                className="w-full rounded-full bg-[var(--color-accent)] py-3 font-medium text-white hover:bg-[var(--color-accent-hover)] transition"
+                onClick={saveEditedMeal}
+              >
+                Save Changes
+              </button>
+            </div>
+            <button className="mt-4 text-[var(--color-text-light)]" onClick={() => setEditingMealId(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {editingFavoriteIndex !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
+          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Edit Favorite</h2>
+            <div className="space-y-4">
+              <input
+                id="edit-favorite-name"
+                name="edit_favorite_name"
+                type="text"
+                placeholder="Favorite name"
+                value={editFavoriteName}
+                onChange={(e) => setEditFavoriteName(e.target.value)}
+                className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+              />
+              {Object.keys(editFavoriteMacros).map((key) => (
+                <div key={key} className="flex items-center gap-4">
+                  <label htmlFor={`edit-favorite-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
+                    {key}
+                  </label>
+                  <input
+                    id={`edit-favorite-macro-${key}`}
+                    name={`edit_favorite_macro_${key}`}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={String(editFavoriteMacros[key as keyof typeof editFavoriteMacros])}
+                    onChange={(e) =>
+                      handleEditFavoriteMacroChange(
+                        key as keyof typeof manualMacros,
+                        e.target.value,
+                      )
+                    }
+                    className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  />
+                </div>
+              ))}
+              <button
+                className="w-full rounded-full bg-[var(--color-accent)] py-3 font-medium text-white hover:bg-[var(--color-accent-hover)] transition"
+                onClick={saveEditedFavorite}
+              >
+                Save Changes
+              </button>
+            </div>
+            <button className="mt-4 text-[var(--color-text-light)]" onClick={() => setEditingFavoriteIndex(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}

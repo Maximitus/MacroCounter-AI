@@ -7,14 +7,24 @@
     Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-heading: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
-  /* Aligned with blueprint / glass palette (255,136,0 accent, #2a3439 base) */
+  /* Blueprint / glass palette (accent rgb(255,136,0), base #2a3439) */
   --color-bg-dark: #2a3439;
   --color-card-dark: #323d44;
   --color-surface: #252d33;
+  /* Deepest panels / insets (modals, scroll track) */
   --color-surface-deep: #1c2328;
+  /* Top header bar + footer bar — same as card-dark for layered toolbox UI */
+  --color-chrome-bar: var(--color-card-dark);
   --color-accent: #ff8800;
   --color-accent-hover: #e67a00;
   --color-text-light: #b3c0c9;
+  --color-panel-hover: #353e43;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -29,7 +39,8 @@ h3,
 }
 
 .glass {
-  background: rgba(42, 52, 57, 0.85);
+  background: color-mix(in srgb, var(--color-card-dark) 88%, transparent);
+  -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 136, 0, 0.1);
 }

@@ -8,7 +8,90 @@ import { Camera, Loader2, MoreVertical, X, Images } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import { generateContentJson } from './geminiBridge';
-import { formatMacroAmount, normalizeAiMacros } from './macroUtils';
+import {
+  formatMacroAmount,
+  normalizeAiMacros,
+  parseGoalIntInput,
+  parseMacroAmountInput,
+  sanitizeMacroAmountRaw,
+} from './macroUtils';
+
+const MACRO_ORDER = ['calories', 'protein', 'carbs', 'fat'] as const;
+type MacroKey = (typeof MACRO_ORDER)[number];
+
+const MACRO_RING_COLORS: Record<MacroKey, string> = {
+  calories: 'var(--color-accent)',
+  protein: '#38bdf8',
+  carbs: '#c4b5fd',
+  fat: '#f472b6',
+};
+
+function MacroProgressWheel({
+  macroKey,
+  current,
+  goal,
+}: {
+  macroKey: MacroKey;
+  current: number;
+  goal: number;
+}) {
+  const safeGoal = goal > 0 ? goal : 1;
+  const ratio = current / safeGoal;
+  const displayPct = Math.round(ratio * 100);
+  const arcRatio = Math.min(1, ratio);
+  const overGoal = ratio >= 1;
+  const size = 100;
+  const stroke = 7;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - arcRatio);
+  const ringColor = overGoal ? '#34d399' : MACRO_RING_COLORS[macroKey];
+  const label = macroKey.charAt(0).toUpperCase() + macroKey.slice(1);
+
+  return (
+    <div
+      className="relative mx-auto flex h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center sm:h-[5.75rem] sm:w-[5.75rem]"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.min(100, displayPct)}
+      aria-valuetext={`${displayPct}% of ${label} goal`}
+      aria-label={`${label} progress toward daily goal`}
+    >
+      <svg
+        className="absolute inset-0 -rotate-90"
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          className="stroke-neutral-700"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-500 ease-out"
+        />
+      </svg>
+      <span className="relative text-center leading-tight">
+        <span className="block text-lg font-bold tabular-nums text-white sm:text-xl">
+          {displayPct}%
+        </span>
+      </span>
+    </div>
+  );
+}
 
 function toastAiConfigError(error: unknown, fallback: string) {
   const msg = error instanceof Error ? error.message : String(error);
@@ -66,6 +149,10 @@ export default function App() {
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [manualMacros, setManualMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  /** While focused, keep raw text so values like "12." or "0." stay editable. */
+  const [macroFieldDraft, setMacroFieldDraft] = useState<
+    Partial<Record<keyof typeof manualMacros, string>>
+  >({});
   const [manualMode, setManualMode] = useState<'individual' | 'favorites' | 'common'>('favorites');
   const [favorites, setFavorites] = useState<{name: string, macros: typeof manualMacros}[]>(() => {
     const saved = localStorage.getItem('favorites');
@@ -113,6 +200,28 @@ export default function App() {
     }
     return () => { document.body.style.overflow = 'unset'; };
   }, [isGoalsModalOpen, isModalOpen, cameraOpen]);
+
+  type ManualMacroKey = keyof typeof manualMacros;
+  const macroInputValue = (key: ManualMacroKey) =>
+    macroFieldDraft[key] !== undefined ? macroFieldDraft[key]! : String(manualMacros[key]);
+
+  const handleMacroInputFocus = (key: ManualMacroKey) => {
+    setMacroFieldDraft((d) => ({ ...d, [key]: String(manualMacros[key]) }));
+  };
+
+  const handleMacroInputBlur = (key: ManualMacroKey) => {
+    setMacroFieldDraft((d) => {
+      const next = { ...d };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const handleMacroInputChange = (key: ManualMacroKey, raw: string) => {
+    const s = sanitizeMacroAmountRaw(raw);
+    setMacroFieldDraft((d) => ({ ...d, [key]: s }));
+    setManualMacros((prev) => ({ ...prev, [key]: parseMacroAmountInput(s) }));
+  };
 
   const addMeal = (name: string, macrosToAdd: typeof manualMacros) => {
     setMacros(prev => ({
@@ -294,16 +403,28 @@ export default function App() {
             <h2 className="text-lg font-semibold text-white">Daily Totals</h2>
             <button className="text-sm text-[var(--color-accent)]" onClick={() => setIsGoalsModalOpen(true)}>Set Goals</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            {Object.entries(macros).map(([key, value]) => (
-              <div key={key} className="bg-[var(--color-surface)] p-5 rounded-xl border border-neutral-700">
-                <p className="text-sm text-[var(--color-text-light)] capitalize">{key}</p>
-                <p className="text-3xl font-bold text-white">
-                  {(value as number).toFixed(0)} / {goals[key as keyof typeof goals]}
-                  <span className="text-sm font-normal text-[var(--color-text-light)] ml-1">{key !== 'calories' ? 'g' : ''}</span>
-                </p>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            {MACRO_ORDER.map((key) => {
+              const value = macros[key];
+              const goal = goals[key];
+              const unit = key === 'calories' ? 'kcal' : 'g';
+              return (
+                <div
+                  key={key}
+                  className="flex flex-col items-center gap-3 bg-[var(--color-surface)] p-4 rounded-xl border border-neutral-700 sm:p-5"
+                >
+                  <MacroProgressWheel macroKey={key} current={value} goal={goal} />
+                  <div className="w-full min-w-0 text-center">
+                    <p className="text-sm font-medium capitalize text-[var(--color-text-light)]">{key}</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-white sm:text-xl">
+                      {value.toFixed(0)}
+                      <span className="font-normal text-[var(--color-text-light)]"> / {goal}</span>
+                      <span className="text-sm font-normal text-[var(--color-text-light)] ml-0.5">{unit}</span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -479,9 +600,13 @@ export default function App() {
                       <input
                         id={`manual-macro-${key}`}
                         name={`manual_macro_${key}`}
-                        type="number"
-                        value={manualMacros[key as keyof typeof manualMacros]}
-                        onChange={(e) => setManualMacros(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={macroInputValue(key as ManualMacroKey)}
+                        onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
+                        onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
+                        onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
                         className="flex-1 p-3 rounded-xl bg-[var(--color-surface)] border border-neutral-600 focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-white"
                       />
                     </div>
@@ -565,7 +690,7 @@ export default function App() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 [&::-webkit-scrollbar]:hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
           <div className="bg-[var(--color-card-dark)] p-6 rounded-2xl shadow-lg w-full max-w-md border border-neutral-700 [&::-webkit-scrollbar]:hidden">
             <h2 className="text-lg font-semibold mb-4 text-white">Add Favorite</h2>
             <div className="flex gap-2 mb-4">
@@ -589,9 +714,14 @@ export default function App() {
                     key={key}
                     id={`favorite-manual-macro-${key}`}
                     name={`favorite_manual_macro_${key}`}
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
                     placeholder={key}
-                    onChange={(e) => setManualMacros(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                    value={macroInputValue(key as ManualMacroKey)}
+                    onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
+                    onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
+                    onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
                     className="w-full p-3 rounded-xl bg-[var(--color-surface)] border border-neutral-600 text-white"
                   />
                 ))}
@@ -691,7 +821,7 @@ export default function App() {
         </div>
       )}
       {isGoalsModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 [&::-webkit-scrollbar]:hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
           <div className="bg-[var(--color-card-dark)] p-6 rounded-2xl shadow-lg w-full max-w-md border border-neutral-700 [&::-webkit-scrollbar]:hidden">
             <h2 className="text-lg font-semibold mb-4 text-white">Set Macro Goals</h2>
             <div className="space-y-4 [&::-webkit-scrollbar]:hidden">
@@ -750,9 +880,16 @@ export default function App() {
                   <input
                     id={`goal-${key}`}
                     name={`goal_${key}`}
-                    type="number"
-                    value={goals[key as keyof typeof goals]}
-                    onChange={(e) => setGoals(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={String(goals[key as keyof typeof goals])}
+                    onChange={(e) =>
+                      setGoals((prev) => ({
+                        ...prev,
+                        [key]: parseGoalIntInput(e.target.value),
+                      }))
+                    }
                     className="flex-1 p-3 rounded-xl bg-[var(--color-surface)] border border-neutral-600 focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-white"
                   />
                 </div>

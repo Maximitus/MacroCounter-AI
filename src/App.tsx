@@ -8,6 +8,7 @@ import { Camera, Loader2, MoreVertical, X, Images } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import { generateContentJson } from './geminiBridge';
+import { SettingsMenu } from './SettingsMenu.tsx';
 import {
   formatMacroAmount,
   normalizeAiMacros,
@@ -85,7 +86,7 @@ function MacroProgressWheel({
         />
       </svg>
       <span className="relative text-center leading-tight">
-        <span className="block text-lg font-bold tabular-nums text-white sm:text-xl">
+        <span className="block text-lg font-bold tabular-nums text-fg sm:text-xl">
           {displayPct}%
         </span>
       </span>
@@ -127,7 +128,7 @@ function summarizeAiMealItems(items: unknown): {
   );
   const mealName =
     normalized
-      .map((i) => String(i.name ?? '').trim())
+      .map((i: Record<string, unknown>) => String(i.name ?? '').trim())
       .filter(Boolean)
       .join(', ') || 'AI meal';
   return {mealName, macros};
@@ -474,18 +475,19 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-dark)] text-white font-sans blueprint-bg">
+    <div className="min-h-screen bg-[var(--color-bg-dark)] text-fg font-sans blueprint-bg">
       <Toaster />
-      <header className="bg-[var(--color-chrome-bar)] px-4 py-4 md:px-8 mb-5 shadow-md border-b border-[var(--color-accent)]/20">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-accent)] brand-font leading-tight">
+      <header className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-4 py-4 shadow-md md:px-8">
+        <h1 className="min-w-0 text-2xl font-semibold leading-tight tracking-tight text-[var(--color-accent)] brand-font">
           Macro Counter
         </h1>
+        <SettingsMenu />
       </header>
 
       <main className="grid gap-6 px-4 pt-3 pb-12 md:px-8 md:pt-5">
-        <section className="glass p-6 rounded-2xl border border-[#ff8800]/10 shadow-lg orange-glow">
+        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-white brand-font">Daily Totals</h2>
+            <h2 className="text-xl font-semibold text-fg brand-font">Daily Totals</h2>
             <button className="text-sm text-[var(--color-accent)]" onClick={() => setIsGoalsModalOpen(true)}>Set Goals</button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
@@ -496,12 +498,12 @@ export default function App() {
               return (
                 <div
                   key={key}
-                  className="flex flex-col items-center gap-3 rounded-xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)] p-4 sm:p-5"
+                  className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 sm:p-5"
                 >
                   <MacroProgressWheel macroKey={key} current={value} goal={goal} />
                   <div className="w-full min-w-0 text-center">
                     <p className="text-sm font-medium capitalize text-[var(--color-text-light)]">{key}</p>
-                    <p className="mt-0.5 text-lg font-bold tabular-nums text-white sm:text-xl">
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-fg sm:text-xl">
                       {value.toFixed(0)}
                       <span className="font-normal text-[var(--color-text-light)]"> / {goal}</span>
                       <span className="text-sm font-normal text-[var(--color-text-light)] ml-0.5">{unit}</span>
@@ -513,7 +515,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="glass p-6 rounded-2xl border border-[#ff8800]/10 shadow-lg orange-glow">
+        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <div className="flex gap-4 mb-6">
             <button 
               className={`flex-1 py-3 rounded-full font-medium transition ${mode === 'ai' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)]'}`}
@@ -552,13 +554,13 @@ export default function App() {
                 />
               <div className="space-y-3">
                 <div className="px-0.5">
-                  <h3 className="text-base font-semibold text-white brand-font">Photo</h3>
+                  <h3 className="text-base font-semibold text-fg brand-font">Photo</h3>
                   <p className="mt-0.5 text-sm leading-snug text-[var(--color-text-light)]">
                     Snap your meal or pick one you already have.
                   </p>
                 </div>
                 {loading ? (
-                  <div className="flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)]">
+                  <div className="flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)]">
                     <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" />
                   </div>
                 ) : (
@@ -575,7 +577,7 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl border border-[#ff8800]/20 bg-[var(--color-surface)] px-4 py-3.5 text-left font-semibold text-white transition active:bg-[var(--color-panel-hover)] sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
+                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-4 py-3.5 text-left font-semibold text-fg transition active:bg-[var(--color-panel-hover)] sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
                       onClick={() => galleryInputRef.current?.click()}
                     >
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-deep)] sm:h-12 sm:w-12">
@@ -586,8 +588,8 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div className="space-y-2 border-t border-[#ff8800]/10 pt-5">
-                <label htmlFor="meal-description" className="block text-sm font-medium text-white">
+              <div className="space-y-2 border-t border-[var(--color-accent)]/10 pt-5">
+                <label htmlFor="meal-description" className="block text-sm font-medium text-fg">
                   Or describe it
                 </label>
                 <div className="flex w-full min-w-0 flex-wrap gap-2 items-stretch">
@@ -600,11 +602,11 @@ export default function App() {
                     placeholder="e.g. chicken salad, large"
                     value={textDescription}
                     onChange={(e) => setTextDescription(e.target.value)}
-                    className="min-w-0 max-w-full grow shrink basis-[min(100%,12rem)] box-border rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-white placeholder:text-[var(--color-text-light)]"
+                    className="min-w-0 max-w-full grow shrink basis-[min(100%,12rem)] box-border rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)]"
                   />
                   <button
                     type="button"
-                    className="inline-flex min-h-[3rem] shrink-0 grow-0 touch-manipulation items-center justify-center rounded-xl bg-[var(--color-surface-deep)] px-5 py-3 text-base font-medium text-white active:bg-[var(--color-panel-hover)] sm:min-h-0"
+                    className="inline-flex min-h-[3rem] shrink-0 grow-0 touch-manipulation items-center justify-center rounded-xl bg-[var(--color-surface-deep)] px-5 py-3 text-base font-medium text-fg active:bg-[var(--color-panel-hover)] sm:min-h-0"
                     onClick={handleTextAnalysis}
                   >
                     Analyze
@@ -616,19 +618,19 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex gap-2">
                 <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'favorites' ? 'bg-[var(--color-panel-hover)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'favorites' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
                   onClick={() => setManualMode('favorites')}
                 >
                   Favorites
                 </button>
                 <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'common' ? 'bg-[var(--color-panel-hover)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'common' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
                   onClick={() => setManualMode('common')}
                 >
                   Common
                 </button>
                 <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'individual' ? 'bg-[var(--color-panel-hover)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'individual' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
                   onClick={() => setManualMode('individual')}
                 >
                   Individual
@@ -637,23 +639,23 @@ export default function App() {
 
               {manualMode === 'favorites' ? (
                 <div className="space-y-4">
-                  <button className="w-full bg-[var(--color-surface-deep)] text-white py-3 rounded-xl hover:bg-[var(--color-panel-hover)] transition" onClick={() => setIsModalOpen(true)}>Add New Favorite</button>
+                  <button className="w-full bg-[var(--color-surface-deep)] text-fg py-3 rounded-xl hover:bg-[var(--color-panel-hover)] transition" onClick={() => setIsModalOpen(true)}>Add New Favorite</button>
                   <div className="space-y-2">
                     {favorites.map((fav, index) => (
                       <div 
                         key={index}
-                        className="w-full rounded-xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)] p-4 text-left flex justify-between items-center"
+                        className="w-full rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left flex justify-between items-center"
                       >
                         <button className="flex-1 text-left" onClick={() => addMeal(fav.name, fav.macros)}>
-                          <p className="font-bold text-white">{fav.name}</p>
+                          <p className="font-bold text-fg">{fav.name}</p>
                           <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(fav.macros.calories)} kcal, {formatMacroAmount(fav.macros.protein)}g P, {formatMacroAmount(fav.macros.carbs)}g C, {formatMacroAmount(fav.macros.fat)}g F</p>
                         </button>
                         <div className="relative">
                           <button onClick={() => setOpenMenuId(openMenuId === `fav-${index}` ? null : `fav-${index}`)}>
-                            <MoreVertical className="text-white" />
+                            <MoreVertical className="text-fg" />
                           </button>
                           {openMenuId === `fav-${index}` && (
-                            <div className="absolute right-0 mt-2 rounded-lg border border-[#ff8800]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
+                            <div className="absolute right-0 mt-2 rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
                               <button className="block w-full text-left text-blue-300 hover:text-blue-200 px-2 py-1" onClick={() => startEditFavorite(index)}>Edit</button>
                               <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {setFavorites(favorites.filter((_, i) => i !== index)); setOpenMenuId(null); toast.success("Favorite removed");}}>Remove</button>
                             </div>
@@ -668,10 +670,10 @@ export default function App() {
                   {COMMON_MEALS.map((meal, index) => (
                     <button 
                       key={index}
-                      className="w-full rounded-xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)] p-4 text-left hover:bg-[var(--color-panel-hover)] transition"
+                      className="w-full rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left hover:bg-[var(--color-panel-hover)] transition"
                       onClick={() => addMeal(meal.name, meal.macros)}
                     >
-                      <p className="font-bold text-white">{meal.name}</p>
+                      <p className="font-bold text-fg">{meal.name}</p>
                       <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P, {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F</p>
                     </button>
                   ))}
@@ -693,7 +695,7 @@ export default function App() {
                         onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
                         onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
                         onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
-                        className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-white"
+                        className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg"
                       />
                     </div>
                   ))}
@@ -709,21 +711,21 @@ export default function App() {
           )}
         </section>
 
-        <section className="glass p-6 rounded-2xl border border-[#ff8800]/10 shadow-lg orange-glow">
-          <h2 className="text-xl font-semibold mb-6 text-white brand-font">Meal History</h2>
+        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
+          <h2 className="text-xl font-semibold mb-6 text-fg brand-font">Meal History</h2>
           <div className="space-y-2">
             {history.map((meal) => (
-              <div key={meal.id} className="flex justify-between items-center rounded-xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)] p-4">
+              <div key={meal.id} className="flex justify-between items-center rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
                 <div>
-                  <p className="font-bold text-white">{meal.name}</p>
+                  <p className="font-bold text-fg">{meal.name}</p>
                   <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P, {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F</p>
                 </div>
                 <div className="relative">
                   <button onClick={() => setOpenMenuId(openMenuId === meal.id ? null : meal.id)}>
-                    <MoreVertical className="text-white" />
+                    <MoreVertical className="text-fg" />
                   </button>
                   {openMenuId === meal.id && (
-                    <div className="absolute right-0 mt-2 rounded-lg border border-[#ff8800]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
+                    <div className="absolute right-0 mt-2 rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
                       <button className="block w-full text-left text-blue-300 hover:text-blue-200 px-2 py-1" onClick={() => startEditMeal(meal)}>Edit</button>
                       <button className="block w-full text-left text-blue-400 hover:text-blue-300 px-2 py-1" onClick={() => {setFavorites([...favorites, {name: meal.name, macros: meal.macros}]); setOpenMenuId(null); toast.success("Added to favorites");}}>Favorite</button>
                       <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {removeMeal(meal.id, meal.macros); setOpenMenuId(null)}}>Remove</button>
@@ -741,7 +743,7 @@ export default function App() {
           <div className="flex justify-end mb-2">
             <button
               type="button"
-              className="rounded-full bg-[var(--color-surface-deep)] p-2 text-white hover:bg-[var(--color-panel-hover)]"
+              className="rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
               onClick={closeCameraModal}
               aria-label="Close camera"
             >
@@ -766,7 +768,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="flex-1 min-w-[8rem] rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface-deep)] py-4 font-medium text-white hover:bg-[var(--color-panel-hover)]"
+                className="flex-1 min-w-[8rem] rounded-xl border border-white/25 bg-white/10 py-4 font-medium text-white hover:bg-white/20"
                 onClick={closeCameraModal}
               >
                 Cancel
@@ -778,12 +780,12 @@ export default function App() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
-          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Add Favorite</h2>
+          <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Add Favorite</h2>
             <div className="mb-4 flex gap-2">
-              <button className={`flex-1 rounded-full py-2 ${modalMode === 'manual' ? 'bg-[var(--color-panel-hover)]' : ''}`} onClick={() => setModalMode('manual')}>Manual</button>
-              <button className={`flex-1 rounded-full py-2 ${modalMode === 'ai' ? 'bg-[var(--color-panel-hover)]' : ''}`} onClick={() => setModalMode('ai')}>AI</button>
-              <button className={`flex-1 rounded-full py-2 ${modalMode === 'picture' ? 'bg-[var(--color-panel-hover)]' : ''}`} onClick={() => setModalMode('picture')}>Picture</button>
+              <button type="button" className={`flex-1 rounded-full py-2 text-sm font-medium ${modalMode === 'manual' ? 'bg-[var(--color-panel-hover)] text-fg' : 'text-[var(--color-text-light)]'}`} onClick={() => setModalMode('manual')}>Manual</button>
+              <button type="button" className={`flex-1 rounded-full py-2 text-sm font-medium ${modalMode === 'ai' ? 'bg-[var(--color-panel-hover)] text-fg' : 'text-[var(--color-text-light)]'}`} onClick={() => setModalMode('ai')}>AI</button>
+              <button type="button" className={`flex-1 rounded-full py-2 text-sm font-medium ${modalMode === 'picture' ? 'bg-[var(--color-panel-hover)] text-fg' : 'text-[var(--color-text-light)]'}`} onClick={() => setModalMode('picture')}>Picture</button>
             </div>
             {modalMode === 'manual' && (
               <div className="space-y-4">
@@ -794,7 +796,7 @@ export default function App() {
                   placeholder="Name"
                   value={favName}
                   onChange={(e) => setFavName(e.target.value)}
-                  className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                 />
                 {Object.keys(manualMacros).map((key) => (
                   <input
@@ -809,7 +811,7 @@ export default function App() {
                     onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
                     onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
                     onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
-                    className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                    className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                   />
                 ))}
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={() => saveFavorite(favName, manualMacros)}>Save</button>
@@ -824,7 +826,7 @@ export default function App() {
                   placeholder="Name"
                   value={favName}
                   onChange={(e) => setFavName(e.target.value)}
-                  className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                 />
                 <input
                   id="favorite-ai-description"
@@ -833,7 +835,7 @@ export default function App() {
                   placeholder="Description"
                   value={textDescription}
                   onChange={(e) => setTextDescription(e.target.value)}
-                  className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                 />
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={async () => {
                   setLoading(true);
@@ -865,14 +867,14 @@ export default function App() {
                   placeholder="Name"
                   value={favName}
                   onChange={(e) => setFavName(e.target.value)}
-                  className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                 />
                 <input
                   id="favorite-picture-file"
                   name="favorite_picture_file"
                   type="file"
                   accept="image/*"
-                  className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                  className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -909,8 +911,8 @@ export default function App() {
       )}
       {editingMealId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
-          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Edit Meal</h2>
+          <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Edit Meal</h2>
             <div className="space-y-4">
               <input
                 id="edit-meal-name"
@@ -919,7 +921,7 @@ export default function App() {
                 placeholder="Meal name"
                 value={editMealName}
                 onChange={(e) => setEditMealName(e.target.value)}
-                className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
               />
               {Object.keys(editMealMacros).map((key) => (
                 <div key={key} className="flex items-center gap-4">
@@ -939,7 +941,7 @@ export default function App() {
                         e.target.value,
                       )
                     }
-                    className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                   />
                 </div>
               ))}
@@ -958,8 +960,8 @@ export default function App() {
       )}
       {editingFavoriteIndex !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
-          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Edit Favorite</h2>
+          <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Edit Favorite</h2>
             <div className="space-y-4">
               <input
                 id="edit-favorite-name"
@@ -968,7 +970,7 @@ export default function App() {
                 placeholder="Favorite name"
                 value={editFavoriteName}
                 onChange={(e) => setEditFavoriteName(e.target.value)}
-                className="w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
               />
               {Object.keys(editFavoriteMacros).map((key) => (
                 <div key={key} className="flex items-center gap-4">
@@ -988,7 +990,7 @@ export default function App() {
                         e.target.value,
                       )
                     }
-                    className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 text-white"
+                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                   />
                 </div>
               ))}
@@ -1007,13 +1009,13 @@ export default function App() {
       )}
       {isGoalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
-          <div className="glass w-full max-w-md rounded-2xl border border-[#ff8800]/10 p-6 shadow-lg orange-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-white brand-font">Set Macro Goals</h2>
+          <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
+            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set Macro Goals</h2>
             <div className="space-y-4 [&::-webkit-scrollbar]:hidden">
-              <div className="rounded-xl border border-[#ff8800]/10 bg-[var(--color-bg-dark)] p-4">
-                <h3 className="mb-2 text-sm font-semibold text-white brand-font">AI Goal Setting</h3>
+              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI Goal Setting</h3>
                 {goalsAiLoading ? (
-                  <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-xl border border-[#ff8800]/10 bg-[var(--color-surface-deep)]">
+                  <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)]">
                     <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
                     <span className="text-sm text-[var(--color-text-light)]">Generating goals…</span>
                   </div>
@@ -1025,12 +1027,12 @@ export default function App() {
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
-                      className="mb-2 w-full rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface-deep)] p-3 text-white"
+                      className="mb-2 w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] p-3 text-fg"
                       rows={2}
                     />
                     <button 
                       type="button"
-                      className="w-full rounded-full bg-[var(--color-surface-deep)] py-2 text-sm font-medium text-white transition hover:bg-[var(--color-panel-hover)]"
+                      className="w-full rounded-full bg-[var(--color-surface-deep)] py-2 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
                       onClick={async () => {
                         setGoalsAiLoading(true);
                         try {
@@ -1075,7 +1077,7 @@ export default function App() {
                         [key]: parseGoalIntInput(e.target.value),
                       }))
                     }
-                    className="flex-1 rounded-xl border border-[#ff8800]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-white"
+                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg"
                   />
                 </div>
               ))}

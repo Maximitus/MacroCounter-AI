@@ -4,6 +4,7 @@ import {BrowserRouter, Outlet, Route, Routes} from 'react-router-dom';
 import App from './App.tsx';
 import TermsPage from './TermsPage.tsx';
 import {DisclaimerFooter, DisclaimerGate} from './Disclaimer.tsx';
+import {ThemeProvider} from './theme.tsx';
 import './index.css';
 
 const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
@@ -20,14 +21,16 @@ function AppShell() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename={routerBasename}>
-      <DisclaimerGate>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/" element={<App />} />
-            <Route path="/terms" element={<TermsPage />} />
-          </Route>
-        </Routes>
-      </DisclaimerGate>
+      <ThemeProvider>
+        <DisclaimerGate>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<App />} />
+              <Route path="/terms" element={<TermsPage />} />
+            </Route>
+          </Routes>
+        </DisclaimerGate>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -47,7 +47,7 @@ export function DisclaimerGate({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg-dark)] text-white blueprint-bg">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg-dark)] text-fg blueprint-bg">
         <p className="text-sm text-[var(--color-text-light)]">Loading…</p>
       </div>
     );
@@ -84,13 +84,13 @@ function DisclaimerModal({
       aria-labelledby="disclaimer-title"
       aria-describedby="disclaimer-body"
     >
-      <div className="glass flex max-h-[min(90vh,40rem)] w-full max-w-lg flex-col rounded-2xl border border-[#ff8800]/10 shadow-xl orange-glow">
-        <div className="flex shrink-0 items-start gap-3 border-b border-[#ff8800]/10 p-5">
+      <div className="glass flex max-h-[min(90vh,40rem)] w-full max-w-lg flex-col rounded-2xl border border-[var(--color-accent)]/10 shadow-xl accent-glow">
+        <div className="flex shrink-0 items-start gap-3 border-b border-[var(--color-accent)]/10 p-5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
             <AlertTriangle className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 id="disclaimer-title" className="text-lg font-semibold text-white brand-font">
+            <h2 id="disclaimer-title" className="text-lg font-semibold text-fg brand-font">
               Important notice
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-light)]">
@@ -104,13 +104,13 @@ function DisclaimerModal({
         >
           <DisclaimerBody />
         </div>
-        <div className="shrink-0 space-y-3 border-t border-[#ff8800]/10 p-5">
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-white">
+        <div className="shrink-0 space-y-3 border-t border-[var(--color-accent)]/10 p-5">
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-fg">
             <input
               type="checkbox"
               checked={agreed}
               onChange={(e) => onAgreedChange(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#ff8800]/20 bg-[var(--color-surface)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--color-accent)]/20 bg-[var(--color-surface)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
             />
             <span>
               I have read and understood this notice. I agree to use Macro Counter only on these
@@ -136,42 +136,42 @@ export function DisclaimerBody() {
     <div className="space-y-4">
       <p className="text-xs uppercase tracking-wide text-[var(--color-text-light)]/80">Summary</p>
       <p>
-        Macro Counter provides <strong className="text-white">approximate</strong> nutrition
+        Macro Counter provides <strong className="text-fg">approximate</strong> nutrition
         information and convenience tools only. It is{' '}
-        <strong className="text-white">not</strong> medical advice, dietetic advice, or a
+        <strong className="text-fg">not</strong> medical advice, dietetic advice, or a
         substitute for a qualified professional. AI-generated numbers can be wrong.
       </p>
       <p className="text-xs uppercase tracking-wide text-[var(--color-text-light)]/80">Full terms</p>
       <ol className="list-decimal space-y-3 pl-4 marker:text-[var(--color-text-light)]/60">
         <li>
-          <strong className="text-white">No professional relationship.</strong> Using this app
+          <strong className="text-fg">No professional relationship.</strong> Using this app
           does not create a doctor–patient, dietitian–client, or any other professional relationship.
         </li>
         <li>
-          <strong className="text-white">Not medical or nutrition advice.</strong> Content is
+          <strong className="text-fg">Not medical or nutrition advice.</strong> Content is
           for general informational and educational purposes. Do not use it to diagnose, treat,
           cure, or prevent any disease or health condition.
         </li>
         <li>
-          <strong className="text-white">AI and data limitations.</strong> Estimates from
+          <strong className="text-fg">AI and data limitations.</strong> Estimates from
           photos, text descriptions, presets, and AI-suggested goals are automated approximations and
           may be inaccurate, incomplete, or inappropriate for you (including allergies, medications,
           pregnancy, eating disorders, athletic needs, or medical diets).
         </li>
         <li>
-          <strong className="text-white">Your responsibility.</strong> You alone are responsible
+          <strong className="text-fg">Your responsibility.</strong> You alone are responsible
           for what you eat and for verifying nutrition information when it matters. Consult a
           licensed physician, registered dietitian, or other qualified professional for personal
           guidance.
         </li>
         <li>
-          <strong className="text-white">No warranty.</strong> The service is provided &quot;AS
+          <strong className="text-fg">No warranty.</strong> The service is provided &quot;AS
           IS&quot; and &quot;AS AVAILABLE,&quot; without warranties of any kind, whether express or
           implied, including merchantability, fitness for a particular purpose, accuracy, or
           non-infringement, to the fullest extent permitted by law.
         </li>
         <li>
-          <strong className="text-white">Limitation of liability.</strong> To the maximum
+          <strong className="text-fg">Limitation of liability.</strong> To the maximum
           extent permitted by applicable law, the owners, operators, affiliates, and contributors
           of Macro Counter disclaim liability for any direct, indirect, incidental, consequential,
           special, exemplary, or punitive damages, or any loss of profits, data, goodwill, or other
@@ -179,21 +179,21 @@ export function DisclaimerBody() {
           service or from reliance on any information it provides.
         </li>
         <li>
-          <strong className="text-white">Third-party services.</strong> Features may depend on
+          <strong className="text-fg">Third-party services.</strong> Features may depend on
           third-party APIs (for example, AI providers). Those services have their own terms,
           outages, and behaviors; we do not control them.
         </li>
         <li>
-          <strong className="text-white">Public use.</strong> If you share access or deploy
+          <strong className="text-fg">Public use.</strong> If you share access or deploy
           this app for others, each user is bound by this notice; you are responsible for your own
           deployment and compliance with applicable laws.
         </li>
         <li>
-          <strong className="text-white">Severability.</strong> If any part of this notice is
+          <strong className="text-fg">Severability.</strong> If any part of this notice is
           held unenforceable, the remainder stays in effect to the fullest extent permitted.
         </li>
       </ol>
-      <p className="border-t border-[#ff8800]/10 pt-4 text-xs text-[var(--color-text-light)]/70">
+      <p className="border-t border-[var(--color-accent)]/10 pt-4 text-xs text-[var(--color-text-light)]/70">
         This notice is not legal advice. Laws vary by place and situation. For binding protection,
         have an attorney review your product, hosting, and liability setup.
       </p>
@@ -237,15 +237,15 @@ export function DisclaimerFooter() {
           aria-modal="true"
           aria-labelledby="disclaimer-footer-title"
         >
-          <div className="glass flex max-h-[min(85vh,36rem)] w-full max-w-lg flex-col rounded-2xl border border-[#ff8800]/10 shadow-xl orange-glow">
-            <div className="flex items-center justify-between border-b border-[#ff8800]/10 px-5 py-4">
-              <h2 id="disclaimer-footer-title" className="text-lg font-semibold text-white brand-font">
+          <div className="glass flex max-h-[min(85vh,36rem)] w-full max-w-lg flex-col rounded-2xl border border-[var(--color-accent)]/10 shadow-xl accent-glow">
+            <div className="flex items-center justify-between border-b border-[var(--color-accent)]/10 px-5 py-4">
+              <h2 id="disclaimer-footer-title" className="text-lg font-semibold text-fg brand-font">
                 Disclaimer
               </h2>
               <button
                 type="button"
                 onClick={() => setVoluntaryOpen(false)}
-                className="rounded-lg px-3 py-1.5 text-sm text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)] hover:text-white"
+                className="rounded-lg px-3 py-1.5 text-sm text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)] hover:text-fg"
               >
                 Close
               </button>

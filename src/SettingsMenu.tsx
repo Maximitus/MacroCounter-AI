@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { Moon, Settings, Sun } from 'lucide-react';
-import { ACCENT_PRESETS, getAccentPreset, useTheme } from './theme.tsx';
+import { ACCENT_PRESETS, useTheme } from './theme.tsx';
 
 export function SettingsMenu() {
   const { theme, setTheme, accentId, setAccentId } = useTheme();
@@ -48,7 +48,11 @@ export function SettingsMenu() {
           }}
         >
           <div
-            className="glass relative w-full max-w-md rounded-2xl border border-[var(--color-accent)]/15 p-6 shadow-lg accent-glow"
+            className={`relative w-full max-w-md rounded-[1.25rem] border p-6 shadow-lg accent-glow ${
+              theme === 'dark'
+                ? 'border-[var(--color-accent)]/20 bg-[#2c3338]'
+                : 'glass border-[var(--color-accent)]/15'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="settings-title" className="mb-6 text-lg font-semibold text-fg brand-font">
@@ -57,38 +61,37 @@ export function SettingsMenu() {
 
             <div className="space-y-6">
               <div>
-                <p className="mb-3 text-sm font-medium text-[var(--color-text-light)]">Theme</p>
-                <div className="flex gap-2">
+                <div className="flex rounded-full bg-[var(--color-surface)] p-1.5">
                   <button
                     type="button"
                     onClick={() => setTheme('dark')}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition ${
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition ${
                       theme === 'dark'
-                        ? 'bg-[var(--color-accent)] text-white'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)]'
+                        ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                        : 'text-[var(--color-text-light)]'
                     }`}
                   >
-                    <Moon className="h-4 w-4" aria-hidden />
+                    <Moon className="h-4 w-4 shrink-0" aria-hidden />
                     Dark
                   </button>
                   <button
                     type="button"
                     onClick={() => setTheme('light')}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition ${
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition ${
                       theme === 'light'
-                        ? 'bg-[var(--color-accent)] text-white'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)]'
+                        ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                        : 'text-[var(--color-text-light)]'
                     }`}
                   >
-                    <Sun className="h-4 w-4" aria-hidden />
+                    <Sun className="h-4 w-4 shrink-0" aria-hidden />
                     Light
                   </button>
                 </div>
               </div>
 
               <div>
-                <p className="mb-3 text-sm font-medium text-[var(--color-text-light)]">Accent color</p>
-                <div className="flex flex-wrap gap-3">
+                <p className="mb-3 text-sm text-[#9ca3af]">Accent color</p>
+                <div className="flex flex-wrap justify-center gap-2 sm:justify-between sm:gap-3">
                   {ACCENT_PRESETS.map((preset) => {
                     const swatch = theme === 'light' ? preset.lightAccent : preset.darkAccent;
                     const selected = accentId === preset.id;
@@ -97,35 +100,34 @@ export function SettingsMenu() {
                         key={preset.id}
                         type="button"
                         onClick={() => setAccentId(preset.id)}
-                        className={`flex flex-col items-center gap-1.5 rounded-lg p-1 transition ${
+                        className={`flex min-w-[4.25rem] flex-col items-center gap-2 rounded-xl px-2.5 py-2 transition ${
                           selected
-                            ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg-dark)]'
-                            : 'opacity-90 hover:opacity-100'
+                            ? 'border-2 border-[var(--color-accent)]'
+                            : 'border-2 border-transparent hover:opacity-95'
                         }`}
                         title={preset.label}
                         aria-label={`Accent ${preset.label}`}
                         aria-pressed={selected}
                       >
                         <span
-                          className="h-10 w-10 rounded-full border border-[var(--color-accent)]/20 shadow-inner"
+                          className="h-11 w-11 shrink-0 rounded-full shadow-inner"
                           style={{ backgroundColor: swatch }}
                         />
-                        <span className="max-w-[4.5rem] truncate text-center text-xs text-[var(--color-text-light)]">
-                          {preset.label}
-                        </span>
+                        <span className="text-center text-xs text-[#9ca3af]">{preset.label}</span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-3 text-xs text-[var(--color-text-light)]/80">
-                  Current: {getAccentPreset(accentId).label}
-                </p>
               </div>
             </div>
 
             <button
               type="button"
-              className="mt-8 w-full rounded-full bg-[var(--color-surface)] py-3 text-sm font-medium text-[var(--color-text-light)] transition hover:bg-[var(--color-panel-hover)]"
+              className={`mt-8 w-full rounded-full py-3.5 text-sm font-medium transition ${
+                theme === 'dark'
+                  ? 'bg-[var(--color-surface)] text-white hover:bg-[var(--color-panel-hover)]'
+                  : 'bg-[var(--color-surface)] text-fg hover:bg-[var(--color-panel-hover)]'
+              }`}
               onClick={() => setOpen(false)}
             >
               Done

@@ -7,6 +7,13 @@ import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { Camera, Loader2, MoreVertical, X, Images } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
+import {
+  promptAggregateMacrosFromDescription,
+  promptAggregateMacrosFromImage,
+  promptDailyMacroGoals,
+  promptMealItemsFromDescription,
+  promptMealItemsFromImage,
+} from './aiPrompts';
 import { generateContentJson } from './geminiBridge';
 import { SettingsMenu } from './SettingsMenu.tsx';
 import {
@@ -336,7 +343,7 @@ export default function App() {
       const text = await generateContentJson({
         parts: [
           {
-            text: `Analyze this food description: "${textDescription}". Return a list of food items identified in the description, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]`,
+            text: promptMealItemsFromDescription(textDescription),
           },
         ],
       });
@@ -374,7 +381,7 @@ export default function App() {
           parts: [
             { inlineData: { mimeType: file.type, data: base64String } },
             {
-              text: 'Analyze this food image. Return a list of food items identified in the image, with their estimated portion size, calories, protein (g), carbs (g), and fat (g) for each item. Return as a JSON array of objects. Format: [{name: string, portion: string, calories: number, protein: number, carbs: number, fat: number}]',
+              text: promptMealItemsFromImage(),
             },
           ],
         });
@@ -843,7 +850,7 @@ export default function App() {
                     const text = await generateContentJson({
                       parts: [
                         {
-                          text: `Analyze this food description: "${textDescription}". Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}`,
+                          text: promptAggregateMacrosFromDescription(textDescription),
                         },
                       ],
                     });
@@ -887,7 +894,7 @@ export default function App() {
                           parts: [
                             {inlineData: {mimeType: file.type, data: base64String}},
                             {
-                              text: 'Analyze this food image. Return the estimated calories, protein (g), carbs (g), and fat (g) as a JSON object. Format: {calories: number, protein: number, carbs: number, fat: number}',
+                              text: promptAggregateMacrosFromImage(),
                             },
                           ],
                         });
@@ -1039,7 +1046,7 @@ export default function App() {
                           const text = await generateContentJson({
                             parts: [
                               {
-                                text: `Act as a nutritionist. Based on this user info: "${aiPrompt}", recommend daily macro goals (calories, protein, carbs, fat). Return as JSON: {calories: number, protein: number, carbs: number, fat: number}`,
+                                text: promptDailyMacroGoals(aiPrompt),
                               },
                             ],
                           });

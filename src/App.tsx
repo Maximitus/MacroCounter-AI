@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { Camera, Loader2, MoreVertical, X, Images } from 'lucide-react';
+import { Camera, Loader2, MoreVertical, X, Images, CalendarDays, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Target } from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -101,6 +101,167 @@ function MacroProgressWheel({
   );
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function MacroCalendar({
+  dailyLog,
+  todayMacros,
+  goals,
+  onClose,
+}: {
+  dailyLog: Record<string, MacroTotals>;
+  todayMacros: MacroTotals;
+  goals: MacroTotals;
+  onClose: () => void;
+}) {
+  const [selectedMacro, setSelectedMacro] = useState<MacroKey>('calories');
+  const todayDate = new Date();
+  const [viewYear, setViewYear] = useState(todayDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(todayDate.getMonth());
+
+  const todayKey = getTodayKey();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+
+  const goToPrevMonth = () => {
+    if (viewMonth === 0) { setViewYear(viewYear - 1); setViewMonth(11); }
+    else setViewMonth(viewMonth - 1);
+  };
+  const goToNextMonth = () => {
+    if (viewMonth === 11) { setViewYear(viewYear + 1); setViewMonth(0); }
+    else setViewMonth(viewMonth + 1);
+  };
+
+  const getDayData = (day: number): 'up' | 'down' | null => {
+    const key = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    let entry: MacroTotals | undefined;
+    if (key === todayKey) {
+      entry = todayMacros;
+    } else {
+      entry = dailyLog[key];
+    }
+    if (!entry) return null;
+    const total = entry[selectedMacro];
+    if (total === 0 && key !== todayKey) return null;
+    return total >= goals[selectedMacro] ? 'up' : 'down';
+  };
+
+  const isToday = (day: number) => {
+    return viewYear === todayDate.getFullYear()
+      && viewMonth === todayDate.getMonth()
+      && day === todayDate.getDate();
+  };
+
+  const macroColor = MACRO_RING_COLORS[selectedMacro];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-5 shadow-lg accent-glow"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-fg brand-font">Monthly Calendar</h2>
+          <button
+            type="button"
+            className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+            onClick={onClose}
+            aria-label="Close calendar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-4 flex gap-1 rounded-full bg-[var(--color-surface)] p-1">
+          {MACRO_ORDER.map((key) => (
+            <button
+              key={key}
+              className={`flex-1 rounded-full py-1.5 text-xs font-medium capitalize transition ${selectedMacro === key ? 'text-white shadow-sm' : 'text-[var(--color-text-light)] hover:text-fg'}`}
+              style={selectedMacro === key ? { backgroundColor: MACRO_RING_COLORS[key] } : undefined}
+              onClick={() => setSelectedMacro(key)}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <button
+            type="button"
+            className="rounded-lg p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+            onClick={goToPrevMonth}
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <span className="text-sm font-semibold text-fg">
+            {MONTH_NAMES[viewMonth]} {viewYear}
+          </span>
+          <button
+            type="button"
+            className="rounded-lg p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+            onClick={goToNextMonth}
+            aria-label="Next month"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-px text-center text-xs">
+          {DAY_LABELS.map((d) => (
+            <div key={d} className="py-1.5 font-semibold text-[var(--color-text-light)]">
+              {d}
+            </div>
+          ))}
+
+          {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+            <div key={`empty-${i}`} />
+          ))}
+
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const status = getDayData(day);
+            const today = isToday(day);
+            return (
+              <div
+                key={day}
+                className="flex flex-col items-center justify-center rounded-lg py-1.5 transition"
+                style={today ? { boxShadow: `0 0 0 2px var(--color-bg-dark), 0 0 0 4px ${macroColor}`, borderRadius: '0.5rem' } : undefined}
+              >
+                <span className={`text-xs tabular-nums ${today ? 'font-bold text-fg' : 'text-[var(--color-text-light)]'}`}>
+                  {day}
+                </span>
+                {status === 'up' && (
+                  <ChevronUp className="h-4 w-4" style={{ color: macroColor }} strokeWidth={3} />
+                )}
+                {status === 'down' && (
+                  <ChevronDown className="h-4 w-4 text-[var(--color-text-light)]" strokeWidth={3} />
+                )}
+                {status === null && (
+                  <div className="h-4 w-4" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[var(--color-text-light)]">
+          <span className="flex items-center gap-1">
+            <ChevronUp className="h-3.5 w-3.5" style={{ color: macroColor }} strokeWidth={3} /> Above target
+          </span>
+          <span className="flex items-center gap-1">
+            <ChevronDown className="h-3.5 w-3.5 text-[var(--color-text-light)]" strokeWidth={3} /> Below target
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function toastAiConfigError(error: unknown, fallback: string) {
   const msg = error instanceof Error ? error.message : String(error);
   if (msg.includes('GEMINI_API_KEY') || msg.includes('Missing GEMINI')) {
@@ -141,6 +302,60 @@ function summarizeAiMealItems(items: unknown): {
   return {mealName, macros};
 }
 
+type MacroTotals = { calories: number; protein: number; carbs: number; fat: number };
+type TotalsView = 'daily' | 'weekly' | 'monthly';
+
+const ZERO_MACROS: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function sumMacros(entries: MacroTotals[]): MacroTotals {
+  return entries.reduce(
+    (acc, m) => ({
+      calories: acc.calories + m.calories,
+      protein: acc.protein + m.protein,
+      carbs: acc.carbs + m.carbs,
+      fat: acc.fat + m.fat,
+    }),
+    { ...ZERO_MACROS },
+  );
+}
+
+function getPeriodTotals(
+  dailyLog: Record<string, MacroTotals>,
+  todayMacros: MacroTotals,
+  view: TotalsView,
+): MacroTotals {
+  if (view === 'daily') return todayMacros;
+  const days = view === 'weekly' ? 7 : 30;
+  const today = new Date();
+  const todayKey = getTodayKey();
+  const entries: MacroTotals[] = [];
+  for (let i = 1; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (dailyLog[key]) entries.push(dailyLog[key]);
+  }
+  if (dailyLog[todayKey]) {
+    entries.push(dailyLog[todayKey]);
+  }
+  entries.push(todayMacros);
+  return sumMacros(entries);
+}
+
+function getPeriodGoals(dailyGoals: MacroTotals, view: TotalsView): MacroTotals {
+  const multiplier = view === 'daily' ? 1 : view === 'weekly' ? 7 : 30;
+  return {
+    calories: dailyGoals.calories * multiplier,
+    protein: dailyGoals.protein * multiplier,
+    carbs: dailyGoals.carbs * multiplier,
+    fat: dailyGoals.fat * multiplier,
+  };
+}
+
 export default function App() {
   const [macros, setMacros] = useState(() => {
     const saved = localStorage.getItem('macros');
@@ -149,6 +364,12 @@ export default function App() {
   const [goals, setGoals] = useState(() => {
     const saved = localStorage.getItem('goals');
     return saved ? JSON.parse(saved) : { calories: 2000, protein: 150, carbs: 200, fat: 70 };
+  });
+  const [totalsView, setTotalsView] = useState<TotalsView>('daily');
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [dailyLog, setDailyLog] = useState<Record<string, MacroTotals>>(() => {
+    const saved = localStorage.getItem('dailyLog');
+    return saved ? JSON.parse(saved) : {};
   });
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -203,6 +424,18 @@ export default function App() {
     const today = new Date().toDateString();
     
     if (lastDate !== today) {
+      if (lastDate) {
+        const prevDate = new Date(lastDate);
+        const prevKey = prevDate.toISOString().slice(0, 10);
+        const prevMacros = localStorage.getItem('macros');
+        if (prevMacros) {
+          setDailyLog((prev) => {
+            const next = { ...prev, [prevKey]: JSON.parse(prevMacros) };
+            localStorage.setItem('dailyLog', JSON.stringify(next));
+            return next;
+          });
+        }
+      }
       setMacros({ calories: 0, protein: 0, carbs: 0, fat: 0 });
       setHistory([]);
       localStorage.setItem('lastUpdatedDate', today);
@@ -214,16 +447,17 @@ export default function App() {
     localStorage.setItem('history', JSON.stringify(history));
     localStorage.setItem('goals', JSON.stringify(goals));
     localStorage.setItem('favorites', JSON.stringify(favorites));
-  }, [macros, history, goals, favorites]);
+    localStorage.setItem('dailyLog', JSON.stringify(dailyLog));
+  }, [macros, history, goals, favorites, dailyLog]);
 
   useEffect(() => {
-    if (isGoalsModalOpen || isModalOpen || cameraOpen || editingMealId || editingFavoriteIndex !== null) {
+    if (isGoalsModalOpen || isModalOpen || cameraOpen || editingMealId || editingFavoriteIndex !== null || calendarOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
-  }, [isGoalsModalOpen, isModalOpen, cameraOpen, editingMealId, editingFavoriteIndex]);
+  }, [isGoalsModalOpen, isModalOpen, cameraOpen, editingMealId, editingFavoriteIndex, calendarOpen]);
 
   type ManualMacroKey = keyof typeof manualMacros;
   const macroInputValue = (key: ManualMacroKey) =>
@@ -494,32 +728,68 @@ export default function App() {
       <main className="grid gap-6 px-4 pt-3 pb-12 md:px-8 md:pt-5">
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-fg brand-font">Daily Totals</h2>
-            <button className="text-sm text-[var(--color-accent)]" onClick={() => setIsGoalsModalOpen(true)}>Set Goals</button>
+            <h2 className="text-xl font-semibold text-fg brand-font">
+              {totalsView === 'daily' ? 'Daily' : totalsView === 'weekly' ? 'Weekly' : 'Monthly'} Totals
+            </h2>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+                onClick={() => setCalendarOpen(true)}
+                aria-label="Open monthly calendar"
+              >
+                <CalendarDays className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+                onClick={() => setIsGoalsModalOpen(true)}
+                aria-label="Set macro goals"
+              >
+                <Target className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-            {MACRO_ORDER.map((key) => {
-              const value = macros[key];
-              const goal = goals[key];
-              const unit = key === 'calories' ? 'kcal' : 'g';
-              return (
-                <div
-                  key={key}
-                  className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 sm:p-5"
-                >
-                  <MacroProgressWheel macroKey={key} current={value} goal={goal} />
-                  <div className="w-full min-w-0 text-center">
-                    <p className="text-sm font-medium capitalize text-[var(--color-text-light)]">{key}</p>
-                    <p className="mt-0.5 text-lg font-bold tabular-nums text-fg sm:text-xl">
-                      {value.toFixed(0)}
-                      <span className="font-normal text-[var(--color-text-light)]"> / {goal}</span>
-                      <span className="text-sm font-normal text-[var(--color-text-light)] ml-0.5">{unit}</span>
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mb-5 flex gap-1 rounded-full bg-[var(--color-surface)] p-1">
+            {(['daily', 'weekly', 'monthly'] as const).map((view) => (
+              <button
+                key={view}
+                className={`flex-1 rounded-full py-1.5 text-sm font-medium capitalize transition ${totalsView === view ? 'bg-[var(--color-accent)] text-white shadow-sm' : 'text-[var(--color-text-light)] hover:text-fg'}`}
+                onClick={() => setTotalsView(view)}
+              >
+                {view}
+              </button>
+            ))}
           </div>
+          {(() => {
+            const periodMacros = getPeriodTotals(dailyLog, macros, totalsView);
+            const periodGoals = getPeriodGoals(goals, totalsView);
+            return (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                {MACRO_ORDER.map((key) => {
+                  const value = periodMacros[key];
+                  const goal = periodGoals[key];
+                  const unit = key === 'calories' ? 'kcal' : 'g';
+                  return (
+                    <div
+                      key={key}
+                      className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 sm:p-5"
+                    >
+                      <MacroProgressWheel macroKey={key} current={value} goal={goal} />
+                      <div className="w-full min-w-0 text-center">
+                        <p className="text-sm font-medium capitalize text-[var(--color-text-light)]">{key}</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-fg sm:text-xl">
+                          {value.toFixed(0)}
+                          <span className="font-normal text-[var(--color-text-light)]"> / {goal}</span>
+                          <span className="text-sm font-normal text-[var(--color-text-light)] ml-0.5">{unit}</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </section>
 
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
@@ -1013,6 +1283,14 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+      {calendarOpen && (
+        <MacroCalendar
+          dailyLog={dailyLog}
+          todayMacros={macros}
+          goals={goals}
+          onClose={() => setCalendarOpen(false)}
+        />
       )}
       {isGoalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">

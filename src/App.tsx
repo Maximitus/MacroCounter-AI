@@ -307,8 +307,12 @@ type TotalsView = 'daily' | 'weekly' | 'monthly';
 
 const ZERO_MACROS: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
+function toLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateKey(new Date());
 }
 
 function sumMacros(entries: MacroTotals[]): MacroTotals {
@@ -336,7 +340,7 @@ function getPeriodTotals(
   for (let i = 1; i < days; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = toLocalDateKey(d);
     if (dailyLog[key]) entries.push(dailyLog[key]);
   }
   if (dailyLog[todayKey]) {
@@ -426,7 +430,7 @@ export default function App() {
     if (lastDate !== today) {
       if (lastDate) {
         const prevDate = new Date(lastDate);
-        const prevKey = prevDate.toISOString().slice(0, 10);
+        const prevKey = toLocalDateKey(prevDate);
         const prevMacros = localStorage.getItem('macros');
         if (prevMacros) {
           setDailyLog((prev) => {

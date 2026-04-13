@@ -396,6 +396,11 @@ export default function App() {
   const [editing, setEditing] = useState(false);
   const [describeOpen, setDescribeOpen] = useState(false);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [aiReview, setAiReview] = useState<{
+    mealName: string;
+    macros: typeof manualMacros;
+    source: 'image' | 'text';
+  } | null>(null);
   const [manualMacros, setManualMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   /** While focused, keep raw text so values like "12." or "0." stay editable. */
   const [macroFieldDraft, setMacroFieldDraft] = useState<
@@ -474,7 +479,8 @@ export default function App() {
       editingFavoriteIndex !== null ||
       calendarOpen ||
       describeOpen ||
-      manualEntryOpen
+      manualEntryOpen ||
+      aiReview
     ) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -489,6 +495,7 @@ export default function App() {
     calendarOpen,
     describeOpen,
     manualEntryOpen,
+    aiReview,
   ]);
 
   type ManualMacroKey = keyof typeof manualMacros;
@@ -619,8 +626,11 @@ export default function App() {
         toast.error('No food items could be identified.');
         return;
       }
-      addMeal(summary.mealName, summary.macros);
-      setTextDescription('');
+      setAiReview({
+        mealName: summary.mealName,
+        macros: summary.macros,
+        source: 'text',
+      });
       setDescribeOpen(false);
     } catch (error) {
       console.error("Error analyzing food description:", error);
@@ -651,7 +661,11 @@ export default function App() {
           toast.error('No food items could be identified.');
           return;
         }
-        addMeal(summary.mealName, summary.macros);
+        setAiReview({
+          mealName: summary.mealName,
+          macros: summary.macros,
+          source: 'image',
+        });
         setDescribeOpen(false);
       } catch (error) {
         console.error('Error analyzing food:', error);
@@ -673,6 +687,32 @@ export default function App() {
   /** Opens the OS camera app on mobile (`capture`); file picker on desktop. */
   const openNativeCamera = () => {
     fileInputRef.current?.click();
+  };
+
+  const acceptAiReview = () => {
+    if (!aiReview) return;
+    addMeal(aiReview.mealName, aiReview.macros);
+    setAiReview(null);
+    setTextDescription('');
+    setDescribeOpen(false);
+  };
+
+  const denyAiReview = () => {
+    if (!aiReview) return;
+    const src = aiReview.source;
+    setAiReview(null);
+    if (src === 'text') setDescribeOpen(true);
+  };
+
+  const retakeAiReview = () => {
+    if (!aiReview) return;
+    const src = aiReview.source;
+    setAiReview(null);
+    if (src === 'image') {
+      openNativeCamera();
+    } else {
+      setDescribeOpen(true);
+    }
   };
 
   const saveFavorite = (name: string, macros: typeof manualMacros) => {
@@ -1398,6 +1438,78 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {aiReview && (
+        <div className="fixed inset-0 z-[60] flex min-h-0 flex-col bg-[var(--color-bg-dark)] blueprint-bg">
+          <header className="shrink-0 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-4 py-4 shadow-md md:px-8">
+            <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
+              <h1 className="min-w-0 text-xl font-semibold leading-tight text-[var(--color-accent)] brand-font">
+                Review AI result
+              </h1>
+              <button
+                type="button"
+                className="shrink-0 rounded-full p-2 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+                onClick={denyAiReview}
+                aria-label="Discard"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </header>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
+            <div className="mx-auto max-w-lg space-y-6">
+              <section className="glass rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-light)]">Meal</p>
+                <p className="mt-1 text-lg font-semibold leading-snug text-fg brand-font">{aiReview.mealName}</p>
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {MACRO_ORDER.map((key) => {
+                    const unit = key === 'calories' ? 'kcal' : 'g';
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-center"
+                      >
+                        <p className="text-xs font-medium capitalize text-[var(--color-text-light)]">{key}</p>
+                        <p className="mt-1 text-lg font-bold tabular-nums text-fg">
+                          {formatMacroAmount(aiReview.macros[key])}
+                          <span className="ml-0.5 text-sm font-normal text-[var(--color-text-light)]">{unit}</span>
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          </main>
+          <footer className="shrink-0 border-t border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)]/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md supports-[backdrop-filter]:bg-[var(--color-chrome-bar)]/90">
+            <div className="mx-auto flex max-w-lg flex-col gap-3">
+              <button
+                type="button"
+                className="w-full rounded-full bg-[var(--color-accent)] py-4 text-base font-semibold text-white shadow-lg transition hover:bg-[var(--color-accent-hover)] active:scale-[0.99]"
+                onClick={acceptAiReview}
+              >
+                Add to log
+              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-surface)] py-3.5 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
+                  onClick={denyAiReview}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-surface)] py-3.5 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
+                  onClick={retakeAiReview}
+                >
+                  {aiReview.source === 'image' ? 'Another photo' : 'Revise description'}
+                </button>
+              </div>
+            </div>
+          </footer>
         </div>
       )}
     </div>

@@ -4,7 +4,21 @@
  */
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { Camera, Loader2, MoreVertical, X, Images, CalendarDays, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Target } from 'lucide-react';
+import {
+  Camera,
+  ClipboardList,
+  Loader2,
+  MessageSquare,
+  MoreVertical,
+  X,
+  Images,
+  CalendarDays,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Target,
+} from 'lucide-react';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -380,7 +394,8 @@ export default function App() {
   const [goalsAiLoading, setGoalsAiLoading] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [editing, setEditing] = useState(false);
-  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
+  const [describeOpen, setDescribeOpen] = useState(false);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [manualMacros, setManualMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   /** While focused, keep raw text so values like "12." or "0." stay editable. */
   const [macroFieldDraft, setMacroFieldDraft] = useState<
@@ -419,9 +434,6 @@ export default function App() {
   const [aiPrompt, setAiPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     const lastDate = localStorage.getItem('lastUpdatedDate');
@@ -455,13 +467,29 @@ export default function App() {
   }, [macros, history, goals, favorites, dailyLog]);
 
   useEffect(() => {
-    if (isGoalsModalOpen || isModalOpen || cameraOpen || editingMealId || editingFavoriteIndex !== null || calendarOpen) {
+    if (
+      isGoalsModalOpen ||
+      isModalOpen ||
+      editingMealId ||
+      editingFavoriteIndex !== null ||
+      calendarOpen ||
+      describeOpen ||
+      manualEntryOpen
+    ) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
-  }, [isGoalsModalOpen, isModalOpen, cameraOpen, editingMealId, editingFavoriteIndex, calendarOpen]);
+  }, [
+    isGoalsModalOpen,
+    isModalOpen,
+    editingMealId,
+    editingFavoriteIndex,
+    calendarOpen,
+    describeOpen,
+    manualEntryOpen,
+  ]);
 
   type ManualMacroKey = keyof typeof manualMacros;
   const macroInputValue = (key: ManualMacroKey) =>
@@ -593,19 +621,12 @@ export default function App() {
       }
       addMeal(summary.mealName, summary.macros);
       setTextDescription('');
+      setDescribeOpen(false);
     } catch (error) {
       console.error("Error analyzing food description:", error);
       toastAiConfigError(error, "Could not analyze description.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const stopCamera = () => {
-    cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
-    cameraStreamRef.current = null;
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null;
     }
   };
 
@@ -631,6 +652,7 @@ export default function App() {
           return;
         }
         addMeal(summary.mealName, summary.macros);
+        setDescribeOpen(false);
       } catch (error) {
         console.error('Error analyzing food:', error);
         toastAiConfigError(error, 'Could not analyze image.');
@@ -648,69 +670,9 @@ export default function App() {
     processImageFile(file);
   };
 
-  const openDeviceCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      fileInputRef.current?.click();
-      return;
-    }
-    try {
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      }
-      stopCamera();
-      cameraStreamRef.current = stream;
-      setCameraOpen(true);
-    } catch {
-      fileInputRef.current?.click();
-    }
-  };
-
-  useEffect(() => {
-    if (!cameraOpen || !cameraVideoRef.current || !cameraStreamRef.current) return;
-    const video = cameraVideoRef.current;
-    video.srcObject = cameraStreamRef.current;
-    video.play().catch(() => {});
-  }, [cameraOpen]);
-
-  useEffect(() => {
-    return () => {
-      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  const closeCameraModal = () => {
-    stopCamera();
-    setCameraOpen(false);
-  };
-
-  const captureFromCamera = () => {
-    const video = cameraVideoRef.current;
-    if (!video) return;
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    if (!w || !h) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
-        closeCameraModal();
-        processImageFile(file);
-      },
-      'image/jpeg',
-      0.92,
-    );
+  /** Opens the OS camera app on mobile (`capture`); file picker on desktop. */
+  const openNativeCamera = () => {
+    fileInputRef.current?.click();
   };
 
   const saveFavorite = (name: string, macros: typeof manualMacros) => {
@@ -722,6 +684,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[var(--color-bg-dark)] text-fg font-sans blueprint-bg">
       <Toaster />
+      <input
+        id="meal-photo-camera"
+        name="meal_photo_camera"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+      />
+      <input
+        id="meal-photo-gallery"
+        name="meal_photo_gallery"
+        type="file"
+        accept="image/*"
+        className="hidden"
+        ref={galleryInputRef}
+        onChange={handleFileChange}
+      />
       <header className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-4 py-4 shadow-md md:px-8">
         <h1 className="min-w-0 text-2xl font-semibold leading-tight tracking-tight text-[var(--color-accent)] brand-font">
           Macro Counter
@@ -729,7 +710,7 @@ export default function App() {
         <SettingsMenu />
       </header>
 
-      <main className="grid gap-6 px-4 pt-3 pb-12 md:px-8 md:pt-5">
+      <main className="grid gap-6 px-4 pt-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:px-8 md:pt-5">
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-fg brand-font">
@@ -797,202 +778,6 @@ export default function App() {
         </section>
 
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
-          <div className="flex gap-4 mb-6">
-            <button 
-              className={`flex-1 py-3 rounded-full font-medium transition ${mode === 'ai' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)]'}`}
-              onClick={() => setMode('ai')}
-            >
-              AI Analysis
-            </button>
-            <button 
-              className={`flex-1 py-3 rounded-full font-medium transition ${mode === 'manual' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)]'}`}
-              onClick={() => setMode('manual')}
-            >
-              Manual Entry
-            </button>
-          </div>
-
-          {mode === 'ai' ? (
-            <div className="space-y-5">
-                <input
-                  id="meal-photo-camera"
-                  name="meal_photo_camera"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                />
-                <input
-                  id="meal-photo-gallery"
-                  name="meal_photo_gallery"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  ref={galleryInputRef}
-                  onChange={handleFileChange}
-                />
-              <div className="space-y-3">
-                <div className="px-0.5">
-                  <h3 className="text-base font-semibold text-fg brand-font">Photo</h3>
-                  <p className="mt-0.5 text-sm leading-snug text-[var(--color-text-light)]">
-                    Snap your meal or pick one you already have.
-                  </p>
-                </div>
-                {loading ? (
-                  <div className="flex min-h-[7.5rem] items-center justify-center rounded-2xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)]">
-                    <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" />
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-                    <button
-                      type="button"
-                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl bg-[var(--color-accent)] px-4 py-3.5 text-left font-semibold text-white shadow-sm transition active:opacity-90 sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
-                      onClick={() => void openDeviceCamera()}
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 sm:h-12 sm:w-12">
-                        <Camera className="h-6 w-6" aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1 sm:text-center">Take photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex min-h-[3.5rem] flex-1 touch-manipulation items-center gap-4 rounded-2xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-4 py-3.5 text-left font-semibold text-fg transition active:bg-[var(--color-panel-hover)] sm:min-h-[4rem] sm:flex-col sm:justify-center sm:gap-2 sm:py-5"
-                      onClick={() => galleryInputRef.current?.click()}
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-deep)] sm:h-12 sm:w-12">
-                        <Images className="h-6 w-6 text-[var(--color-text-light)]" aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1 sm:text-center">Choose from photos</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2 border-t border-[var(--color-accent)]/10 pt-5">
-                <label htmlFor="meal-description" className="block text-sm font-medium text-fg">
-                  Or describe it
-                </label>
-                <div className="flex w-full min-w-0 flex-wrap gap-2 items-stretch">
-                  <input
-                    id="meal-description"
-                    name="meal_description"
-                    type="text"
-                    enterKeyHint="send"
-                    autoComplete="off"
-                    placeholder="e.g. chicken salad, large"
-                    value={textDescription}
-                    onChange={(e) => setTextDescription(e.target.value)}
-                    className="min-w-0 max-w-full grow shrink basis-[min(100%,12rem)] box-border rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)]"
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex min-h-[3rem] shrink-0 grow-0 touch-manipulation items-center justify-center rounded-xl bg-[var(--color-surface-deep)] px-5 py-3 text-base font-medium text-fg active:bg-[var(--color-panel-hover)] sm:min-h-0"
-                    onClick={handleTextAnalysis}
-                  >
-                    Analyze
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex gap-2">
-                <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'favorites' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
-                  onClick={() => setManualMode('favorites')}
-                >
-                  Favorites
-                </button>
-                <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'common' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
-                  onClick={() => setManualMode('common')}
-                >
-                  Common
-                </button>
-                <button 
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition ${manualMode === 'individual' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
-                  onClick={() => setManualMode('individual')}
-                >
-                  Individual
-                </button>
-              </div>
-
-              {manualMode === 'favorites' ? (
-                <div className="space-y-4">
-                  <button className="w-full bg-[var(--color-surface-deep)] text-fg py-3 rounded-xl hover:bg-[var(--color-panel-hover)] transition" onClick={() => setIsModalOpen(true)}>Add New Favorite</button>
-                  <div className="space-y-2">
-                    {favorites.map((fav, index) => (
-                      <div 
-                        key={index}
-                        className="w-full rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left flex justify-between items-center"
-                      >
-                        <button className="flex-1 text-left" onClick={() => addMeal(fav.name, fav.macros)}>
-                          <p className="font-bold text-fg">{fav.name}</p>
-                          <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(fav.macros.calories)} kcal, {formatMacroAmount(fav.macros.protein)}g P, {formatMacroAmount(fav.macros.carbs)}g C, {formatMacroAmount(fav.macros.fat)}g F</p>
-                        </button>
-                        <div className="relative">
-                          <button onClick={() => setOpenMenuId(openMenuId === `fav-${index}` ? null : `fav-${index}`)}>
-                            <MoreVertical className="text-fg" />
-                          </button>
-                          {openMenuId === `fav-${index}` && (
-                            <div className="absolute right-0 mt-2 rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] shadow-lg z-10 p-2 space-y-1">
-                              <button className="block w-full text-left text-blue-300 hover:text-blue-200 px-2 py-1" onClick={() => startEditFavorite(index)}>Edit</button>
-                              <button className="block w-full text-left text-red-400 hover:text-red-300 px-2 py-1" onClick={() => {setFavorites(favorites.filter((_, i) => i !== index)); setOpenMenuId(null); toast.success("Favorite removed");}}>Remove</button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : manualMode === 'common' ? (
-                <div className="space-y-2">
-                  {COMMON_MEALS.map((meal, index) => (
-                    <button 
-                      key={index}
-                      className="w-full rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left hover:bg-[var(--color-panel-hover)] transition"
-                      onClick={() => addMeal(meal.name, meal.macros)}
-                    >
-                      <p className="font-bold text-fg">{meal.name}</p>
-                      <p className="text-sm text-[var(--color-text-light)]">{formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P, {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {Object.keys(manualMacros).map((key) => (
-                    <div key={key} className="flex items-center gap-4">
-                      <label htmlFor={`manual-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
-                        {key}
-                      </label>
-                      <input
-                        id={`manual-macro-${key}`}
-                        name={`manual_macro_${key}`}
-                        type="text"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        value={macroInputValue(key as ManualMacroKey)}
-                        onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
-                        onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
-                        onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
-                        className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg"
-                      />
-                    </div>
-                  ))}
-                  <button 
-                    className="w-full bg-[var(--color-accent)] text-white py-4 rounded-full font-medium hover:bg-[var(--color-accent-hover)] transition"
-                    onClick={() => addMeal("Manual Entry", manualMacros)}
-                  >
-                    Add
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <h2 className="text-xl font-semibold mb-6 text-fg brand-font">Meal History</h2>
           <div className="space-y-2">
             {history.map((meal) => (
@@ -1019,41 +804,276 @@ export default function App() {
         </section>
       </main>
 
-      {cameraOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="flex justify-end mb-2">
-            <button
-              type="button"
-              className="rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
-              onClick={closeCameraModal}
-              aria-label="Close camera"
-            >
-              <X className="h-6 w-6" />
-            </button>
+      <footer
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)]/95 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] backdrop-blur-md supports-[backdrop-filter]:bg-[var(--color-chrome-bar)]/90"
+        role="navigation"
+        aria-label="Log a meal"
+      >
+        <div className="mx-auto flex max-w-lg items-end justify-between gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+          <button
+            type="button"
+            className="flex min-h-[3.5rem] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-transparent bg-[var(--color-surface)]/90 py-2 text-xs font-medium text-[var(--color-text-light)] transition hover:border-[var(--color-accent)]/25 hover:text-fg active:bg-[var(--color-panel-hover)]"
+            onClick={() => setDescribeOpen(true)}
+          >
+            <MessageSquare className="h-6 w-6 shrink-0" aria-hidden />
+            <span className="leading-tight">Describe</span>
+          </button>
+          <button
+            type="button"
+            className="relative -top-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-white shadow-lg shadow-[var(--color-accent)]/35 transition hover:bg-[var(--color-accent-hover)] active:scale-[0.98] disabled:opacity-60"
+            onClick={() => openNativeCamera()}
+            disabled={loading}
+            aria-label="Take a photo of your meal"
+          >
+            {loading ? (
+              <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+            ) : (
+              <Camera className="h-8 w-8" aria-hidden />
+            )}
+          </button>
+          <button
+            type="button"
+            className="flex min-h-[3.5rem] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-transparent bg-[var(--color-surface)]/90 py-2 text-xs font-medium text-[var(--color-text-light)] transition hover:border-[var(--color-accent)]/25 hover:text-fg active:bg-[var(--color-panel-hover)]"
+            onClick={() => setManualEntryOpen(true)}
+          >
+            <ClipboardList className="h-6 w-6 shrink-0" aria-hidden />
+            <span className="leading-tight">Manual</span>
+          </button>
+        </div>
+      </footer>
+
+      {describeOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden"
+          onClick={() => {
+            if (!loading) setDescribeOpen(false);
+          }}
+        >
+          <div
+            className="glass relative w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-fg brand-font">Describe your meal</h2>
+                <p className="mt-1 text-sm text-[var(--color-text-light)]">
+                  Tell the AI what you ate in plain language.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg disabled:opacity-40"
+                onClick={() => setDescribeOpen(false)}
+                disabled={loading}
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative space-y-3">
+              {loading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--color-bg-dark)]/70">
+                  <Loader2 className="h-10 w-10 animate-spin text-[var(--color-accent)]" aria-hidden />
+                </div>
+              )}
+              <label htmlFor="meal-description" className="sr-only">
+                Meal description
+              </label>
+              <input
+                id="meal-description"
+                name="meal_description"
+                type="text"
+                enterKeyHint="send"
+                autoComplete="off"
+                placeholder="e.g. chicken salad, large"
+                value={textDescription}
+                onChange={(e) => setTextDescription(e.target.value)}
+                disabled={loading}
+                className="box-border w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)] disabled:opacity-60"
+              />
+              <button
+                type="button"
+                className="w-full rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                onClick={() => void handleTextAnalysis()}
+                disabled={loading || !textDescription.trim()}
+              >
+                Analyze
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-60"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={loading}
+              >
+                <Images className="h-5 w-5 text-[var(--color-text-light)]" aria-hidden />
+                Choose from photos
+              </button>
+            </div>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
-            <video
-              ref={cameraVideoRef}
-              className="max-h-[min(70vh,100%)] w-full max-w-lg rounded-xl object-cover"
-              autoPlay
-              playsInline
-              muted
-            />
-            <div className="flex w-full max-w-lg flex-wrap gap-2">
+        </div>
+      )}
+
+      {manualEntryOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden"
+          onClick={() => setManualEntryOpen(false)}
+        >
+          <div
+            className="glass max-h-[min(90vh,36rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-fg brand-font">Manual entry</h2>
               <button
                 type="button"
-                className="flex-1 min-w-[8rem] rounded-xl bg-[var(--color-accent)] py-4 font-medium text-white hover:bg-[var(--color-accent-hover)]"
-                onClick={captureFromCamera}
+                className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+                onClick={() => setManualEntryOpen(false)}
+                aria-label="Close"
               >
-                Capture
+                <X className="h-5 w-5" />
               </button>
-              <button
-                type="button"
-                className="flex-1 min-w-[8rem] rounded-xl border border-white/25 bg-white/10 py-4 font-medium text-white hover:bg-white/20"
-                onClick={closeCameraModal}
-              >
-                Cancel
-              </button>
+            </div>
+            <div className="space-y-6">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={`flex-1 rounded-full py-2 text-sm font-medium transition ${manualMode === 'favorites' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  onClick={() => setManualMode('favorites')}
+                >
+                  Favorites
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded-full py-2 text-sm font-medium transition ${manualMode === 'common' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  onClick={() => setManualMode('common')}
+                >
+                  Common
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded-full py-2 text-sm font-medium transition ${manualMode === 'individual' ? 'bg-[var(--color-panel-hover)] text-fg' : 'bg-[var(--color-surface)] text-[var(--color-text-light)]'}`}
+                  onClick={() => setManualMode('individual')}
+                >
+                  Individual
+                </button>
+              </div>
+
+              {manualMode === 'favorites' ? (
+                <div className="space-y-4">
+                  <button
+                    type="button"
+                    className="w-full rounded-xl bg-[var(--color-surface-deep)] py-3 text-fg transition hover:bg-[var(--color-panel-hover)]"
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    Add New Favorite
+                  </button>
+                  <div className="space-y-2">
+                    {favorites.map((fav, index) => (
+                      <div
+                        key={index}
+                        className="flex w-full items-center justify-between rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left"
+                      >
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => {
+                            addMeal(fav.name, fav.macros);
+                            setManualEntryOpen(false);
+                          }}
+                        >
+                          <p className="font-bold text-fg">{fav.name}</p>
+                          <p className="text-sm text-[var(--color-text-light)]">
+                            {formatMacroAmount(fav.macros.calories)} kcal, {formatMacroAmount(fav.macros.protein)}g P,{' '}
+                            {formatMacroAmount(fav.macros.carbs)}g C, {formatMacroAmount(fav.macros.fat)}g F
+                          </p>
+                        </button>
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setOpenMenuId(openMenuId === `fav-${index}` ? null : `fav-${index}`)}
+                          >
+                            <MoreVertical className="text-fg" />
+                          </button>
+                          {openMenuId === `fav-${index}` && (
+                            <div className="absolute right-0 z-10 mt-2 space-y-1 rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] p-2 shadow-lg">
+                              <button
+                                type="button"
+                                className="block w-full px-2 py-1 text-left text-blue-300 hover:text-blue-200"
+                                onClick={() => startEditFavorite(index)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="block w-full px-2 py-1 text-left text-red-400 hover:text-red-300"
+                                onClick={() => {
+                                  setFavorites(favorites.filter((_, i) => i !== index));
+                                  setOpenMenuId(null);
+                                  toast.success('Favorite removed');
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : manualMode === 'common' ? (
+                <div className="space-y-2">
+                  {COMMON_MEALS.map((meal, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      className="w-full rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-left transition hover:bg-[var(--color-panel-hover)]"
+                      onClick={() => {
+                        addMeal(meal.name, meal.macros);
+                        setManualEntryOpen(false);
+                      }}
+                    >
+                      <p className="font-bold text-fg">{meal.name}</p>
+                      <p className="text-sm text-[var(--color-text-light)]">
+                        {formatMacroAmount(meal.macros.calories)} kcal, {formatMacroAmount(meal.macros.protein)}g P,{' '}
+                        {formatMacroAmount(meal.macros.carbs)}g C, {formatMacroAmount(meal.macros.fat)}g F
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.keys(manualMacros).map((key) => (
+                    <div key={key} className="flex items-center gap-4">
+                      <label htmlFor={`manual-macro-${key}`} className="w-24 capitalize text-[var(--color-text-light)]">
+                        {key}
+                      </label>
+                      <input
+                        id={`manual-macro-${key}`}
+                        name={`manual_macro_${key}`}
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={macroInputValue(key as ManualMacroKey)}
+                        onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
+                        onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
+                        onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
+                        className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)]"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="w-full rounded-full bg-[var(--color-accent)] py-4 font-medium text-white transition hover:bg-[var(--color-accent-hover)]"
+                    onClick={() => {
+                      addMeal('Manual Entry', manualMacros);
+                      setManualEntryOpen(false);
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

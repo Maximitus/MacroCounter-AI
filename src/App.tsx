@@ -752,11 +752,34 @@ export default function App() {
 
       <main className="grid gap-6 px-4 pt-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:px-8 md:pt-5">
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-fg brand-font">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h2 className="min-w-0 flex-1 text-xl font-semibold text-fg brand-font">
               {totalsView === 'daily' ? 'Daily' : totalsView === 'weekly' ? 'Weekly' : 'Monthly'} Totals
             </h2>
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-2">
+              <div role="tablist" aria-label="Totals period">
+                <div className="inline-flex gap-0.5 rounded-full bg-[var(--color-surface)] p-0.5">
+                  {(['daily', 'weekly', 'monthly'] as const).map((view) => {
+                    const short =
+                      view === 'daily' ? 'D' : view === 'weekly' ? 'W' : 'M';
+                    const label =
+                      view === 'daily' ? 'Daily' : view === 'weekly' ? 'Weekly' : 'Monthly';
+                    return (
+                      <button
+                        key={view}
+                        type="button"
+                        role="tab"
+                        aria-label={`${label} totals`}
+                        aria-selected={totalsView === view}
+                        className={`min-w-[1.875rem] rounded-full px-2 py-1 text-xs font-semibold tabular-nums transition sm:min-w-[2rem] sm:px-2.5 ${totalsView === view ? 'bg-[var(--color-accent)] text-white shadow-sm' : 'text-[var(--color-text-light)] hover:text-fg'}`}
+                        onClick={() => setTotalsView(view)}
+                      >
+                        {short}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <button
                 type="button"
                 className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
@@ -774,17 +797,6 @@ export default function App() {
                 <Target className="h-5 w-5" />
               </button>
             </div>
-          </div>
-          <div className="mb-5 flex gap-1 rounded-full bg-[var(--color-surface)] p-1">
-            {(['daily', 'weekly', 'monthly'] as const).map((view) => (
-              <button
-                key={view}
-                className={`flex-1 rounded-full py-1.5 text-sm font-medium capitalize transition ${totalsView === view ? 'bg-[var(--color-accent)] text-white shadow-sm' : 'text-[var(--color-text-light)] hover:text-fg'}`}
-                onClick={() => setTotalsView(view)}
-              >
-                {view}
-              </button>
-            ))}
           </div>
           {(() => {
             const periodMacros = getPeriodTotals(dailyLog, macros, totalsView);

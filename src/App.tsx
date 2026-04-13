@@ -1505,7 +1505,7 @@ export default function App() {
                   className="flex-1 rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-surface)] py-3.5 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
                   onClick={retakeAiReview}
                 >
-                  {aiReview.source === 'image' ? 'Another photo' : 'Revise description'}
+                  {aiReview.source === 'image' ? 'Retake' : 'Revise description'}
                 </button>
               </div>
             </div>

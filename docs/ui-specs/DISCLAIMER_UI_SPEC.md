@@ -37,7 +37,9 @@ Reference: `src/main.tsx`.
 ### 2.3 Legal discoverability
 
 - Settings modal must include a clear legal entry point linking to `/terms`.
-- Recommended copy: **"Terms of use and full disclaimer"**.
+- Place the legal link in the **settings modal header**, right-aligned opposite the "Settings" title.
+- Style as **plain text link** (not a boxed/list-row button in the modal body).
+- Recommended short copy: **"Legal"**.
 
 Reference: `src/SettingsMenu.tsx`.
 
@@ -70,3 +72,51 @@ Reference: `src/SettingsMenu.tsx`.
 - [ ] Settings includes link to `/terms`.
 - [ ] `/terms` shows full disclaimer content.
 - [ ] Mobile viewport: no legal UI hidden behind bottom "chin".
+
+---
+
+## 6. Sister app migration guide
+
+Use this when applying the same decision to another toolbox app.
+
+### 6.1 What to remove
+
+- Remove any always-visible disclaimer/footer text mounted in the global app shell.
+- Remove legal copy from fixed bottom action bars used for capture, submit, scan, or other primary actions.
+- Remove duplicate legal snippets if a full terms/disclaimer page already exists.
+
+### 6.2 What to add
+
+- Keep (or add) a blocking first-use disclaimer gate with versioned acknowledgement storage.
+- Add one explicit legal navigation path in settings/profile/help:
+  - Preferred pattern: **header text link** in the settings modal (`Settings` on left, `Legal` link on right).
+- Ensure there is a dedicated legal route/page (example: `/terms`) containing full terms + disclaimer.
+
+### 6.3 File-by-file patch pattern (React apps)
+
+1. **Router shell (`main.tsx` or equivalent)**
+   - Remove global `DisclaimerFooter` mounting.
+   - Keep routes for home + terms pages.
+2. **Settings modal/menu**
+   - Add a right-aligned `Legal` text link in the modal header that routes to terms.
+   - Close modal on link click.
+3. **Disclaimer module**
+   - Keep `DisclaimerGate` + versioned `localStorage` acknowledgement.
+   - Keep full disclaimer body component reusable by terms page.
+4. **Terms page**
+   - Confirm full disclaimer appears in readable body copy, not just a one-line summary.
+
+### 6.4 Acceptance key naming
+
+- Keep app-specific acknowledgement keys (example: `myapp_disclaimer_ack`) to avoid cross-app false acceptance.
+- Bump disclaimer version when terms materially change so returning users are reprompted.
+
+---
+
+## 7. QA for sister apps
+
+- [ ] No legal text is visually attached to a fixed bottom control bar.
+- [ ] First-use flow blocks app interaction until acceptance.
+- [ ] Legal link is reachable in <=2 taps/clicks from primary screen.
+- [ ] Terms page is reachable directly by URL and from in-app navigation.
+- [ ] iOS/Android gesture-nav devices do not hide legal affordances.

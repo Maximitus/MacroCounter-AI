@@ -56,9 +56,18 @@ export function SettingsMenu() {
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="settings-title" className="mb-6 text-lg font-semibold text-fg brand-font">
-              Settings
-            </h2>
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <h2 id="settings-title" className="text-lg font-semibold text-fg brand-font">
+                Settings
+              </h2>
+              <Link
+                to="/terms"
+                onClick={() => setOpen(false)}
+                className="text-sm text-[var(--color-accent)] underline-offset-2 hover:underline"
+              >
+                Legal
+              </Link>
+            </div>
 
             <div className="space-y-6">
               <div>
@@ -121,16 +130,6 @@ export function SettingsMenu() {
                 </div>
               </div>
 
-              <div>
-                <p className="mb-3 text-sm text-[#9ca3af]">Legal</p>
-                <Link
-                  to="/terms"
-                  onClick={() => setOpen(false)}
-                  className="block rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-4 py-3 text-sm text-fg transition hover:bg-[var(--color-panel-hover)]"
-                >
-                  Terms of use and full disclaimer
-                </Link>
-              </div>
             </div>
 
             <button

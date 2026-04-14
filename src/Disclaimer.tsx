@@ -206,7 +206,14 @@ export function DisclaimerFooter() {
 
   return (
     <>
-      <footer className="border-t border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-6 py-4">
+      <footer
+        className="border-t border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-6 py-4"
+        style={{
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right, 0px))',
+          paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         <div className="mx-auto max-w-2xl space-y-2 text-center text-xs leading-relaxed text-[var(--color-text-light)]/80">
           <p className="text-[var(--color-text-light)]">{getCopyrightLine()}</p>
           <p>
@@ -233,6 +240,10 @@ export function DisclaimerFooter() {
       {voluntaryOpen && (
         <div
           className="fixed inset-0 z-[99] flex items-center justify-center bg-black/70 p-4"
+          style={{
+            paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+            paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+          }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="disclaimer-footer-title"

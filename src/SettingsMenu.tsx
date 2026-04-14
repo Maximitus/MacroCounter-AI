@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Moon, Settings, Sun } from 'lucide-react';
 import { ACCENT_PRESETS, useTheme } from './theme.tsx';
 
@@ -118,6 +119,17 @@ export function SettingsMenu() {
                     );
                   })}
                 </div>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm text-[#9ca3af]">Legal</p>
+                <Link
+                  to="/terms"
+                  onClick={() => setOpen(false)}
+                  className="block rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-4 py-3 text-sm text-fg transition hover:bg-[var(--color-panel-hover)]"
+                >
+                  Terms of use and full disclaimer
+                </Link>
               </div>
             </div>
 

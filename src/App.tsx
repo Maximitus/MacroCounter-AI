@@ -18,7 +18,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Target,
+  Scale,
+  Plus,
 } from 'lucide-react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { COMMON_MEALS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -30,7 +42,9 @@ import {
 } from './aiPrompts';
 import { generateContentJson } from './geminiBridge';
 import { SettingsMenu } from './SettingsMenu.tsx';
+import { SisterAppsTitleMenu } from './SisterAppsTitleMenu.tsx';
 import {
+  ceilToOneDecimal,
   formatMacroAmount,
   normalizeAiMacros,
   parseGoalIntInput,
@@ -276,6 +290,241 @@ function MacroCalendar({
   );
 }
 
+function sortDateKeysAsc(keys: string[]): string[] {
+  return [...keys].sort((a, b) => a.localeCompare(b));
+}
+
+function getLatestWeight(weightLog: Record<string, number>): number | null {
+  const keys = Object.keys(weightLog).filter((k) => Number.isFinite(weightLog[k]) && weightLog[k] > 0);
+  if (keys.length === 0) return null;
+  const lastKey = sortDateKeysAsc(keys)[keys.length - 1]!;
+  return weightLog[lastKey] ?? null;
+}
+
+function buildWeightChartData(weightLog: Record<string, number>) {
+  const keys = sortDateKeysAsc(
+    Object.keys(weightLog).filter((k) => Number.isFinite(weightLog[k]) && weightLog[k] > 0),
+  );
+  return keys.map((key) => {
+    const [y, m, d] = key.split('-').map((n) => parseInt(n, 10));
+    const label =
+      Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)
+        ? `${m}/${d}`
+        : key;
+    return { key, label, weight: ceilToOneDecimal(weightLog[key]!) };
+  });
+}
+
+function parseOptionalAiWeightLb(value: unknown): number | null {
+  if (value == null) return null;
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return ceilToOneDecimal(n);
+}
+
+function WeightSection({
+  weightLog,
+  weightGoal,
+  onLogWeight,
+}: {
+  weightLog: Record<string, number>;
+  weightGoal: number;
+  onLogWeight: (weight: number) => void;
+}) {
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logDraft, setLogDraft] = useState('');
+
+  const latest = getLatestWeight(weightLog);
+  const chartData = buildWeightChartData(weightLog);
+
+  const weights = chartData.map((p) => p.weight);
+  const goalForDomain = weightGoal > 0 ? ceilToOneDecimal(weightGoal) : null;
+  const minData = weights.length ? Math.min(...weights) : null;
+  const maxData = weights.length ? Math.max(...weights) : null;
+  let yDomain: [number, number] | undefined;
+  if (minData !== null && maxData !== null) {
+    const candidates = goalForDomain != null ? [minData, maxData, goalForDomain] : [minData, maxData];
+    const lo = Math.min(...candidates);
+    const hi = Math.max(...candidates);
+    const span = hi - lo;
+    const pad = span > 0 ? Math.max(0.5, span * 0.08) : 1;
+    yDomain = [lo - pad, hi + pad];
+  }
+
+  const handleLog = () => {
+    const w = parseMacroAmountInput(logDraft);
+    if (!(w > 0)) {
+      toast.error('Enter a weight greater than zero.');
+      return;
+    }
+    onLogWeight(ceilToOneDecimal(w));
+    setLogDraft('');
+    toast.success('Weight logged');
+    setLogModalOpen(false);
+  };
+
+  useEffect(() => {
+    if (!logModalOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [logModalOpen]);
+
+  return (
+    <>
+      <section className="glass rounded-2xl border border-[var(--color-accent)]/10 p-4 shadow-lg accent-glow">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-fg brand-font">
+            <Scale className="h-5 w-5 shrink-0 text-[var(--color-accent)]" aria-hidden />
+            Weight
+          </h2>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className="text-right tabular-nums"
+              aria-label={
+                latest != null
+                  ? `Most recent weight ${formatMacroAmount(latest)} pounds`
+                  : 'No weight logged yet'
+              }
+            >
+              <span className="text-lg font-bold text-fg">
+                {latest != null ? formatMacroAmount(latest) : '—'}
+              </span>
+              <span className="text-xs font-medium text-[var(--color-text-light)]"> lb</span>
+            </span>
+            <button
+              type="button"
+              className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+              onClick={() => setLogModalOpen(true)}
+              aria-label="Log weight"
+            >
+              <Plus className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        <div>
+          {chartData.length === 0 ? (
+            <p className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] py-6 text-center text-sm text-[var(--color-text-light)]">
+              Log weight on one or more days to see the chart. Use the log button above to add an entry.
+            </p>
+          ) : (
+            <div className="h-44 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--color-accent)" strokeOpacity={0.12} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: 'var(--color-text-light)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--color-accent)', strokeOpacity: 0.2 }}
+                  />
+                  <YAxis
+                    domain={yDomain ?? ['auto', 'auto']}
+                    width={44}
+                    tick={{ fill: 'var(--color-text-light)', fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'var(--color-accent)', strokeOpacity: 0.2 }}
+                    tickFormatter={(v) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--color-surface-deep)',
+                      border: '1px solid rgba(148, 163, 184, 0.22)',
+                      borderRadius: '0.75rem',
+                    }}
+                    labelFormatter={(_label, payload) => {
+                      const p = payload?.[0]?.payload as { key?: string } | undefined;
+                      return p?.key ? p.key : '';
+                    }}
+                    formatter={(value: number) => [`${formatMacroAmount(value)} lb`, 'Weight']}
+                  />
+                  {goalForDomain != null && (
+                    <ReferenceLine
+                      y={goalForDomain}
+                      stroke="#34d399"
+                      strokeDasharray="5 5"
+                      label={{ value: 'Goal', fill: 'var(--color-text-light)', fontSize: 11 }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    stroke="var(--color-accent)"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: 'var(--color-accent)' }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {logModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden"
+          onClick={() => setLogModalOpen(false)}
+        >
+          <div
+            className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold text-fg brand-font">Log weight</h2>
+              <button
+                type="button"
+                className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+                onClick={() => setLogModalOpen(false)}
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="weight-log-input-modal" className="text-xs font-medium text-[var(--color-text-light)]">
+                  Today&apos;s weight (lb)
+                </label>
+                <input
+                  id="weight-log-input-modal"
+                  name="weight_log_modal"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="e.g. 175.4"
+                  value={logDraft}
+                  onChange={(e) => setLogDraft(sanitizeMacroAmountRaw(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleLog();
+                  }}
+                  className="mt-1 box-border w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-fg placeholder:text-[var(--color-text-light)] focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)]"
+                />
+              </div>
+              <button
+                type="button"
+                className="w-full rounded-full bg-[var(--color-accent)] py-3 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)]"
+                onClick={handleLog}
+              >
+                Log weight
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-surface)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
+                onClick={() => setLogModalOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function toastAiConfigError(error: unknown, fallback: string) {
   const msg = error instanceof Error ? error.message : String(error);
   if (msg.includes('GEMINI_API_KEY') || msg.includes('Missing GEMINI')) {
@@ -389,7 +638,30 @@ export default function App() {
     const saved = localStorage.getItem('dailyLog');
     return saved ? JSON.parse(saved) : {};
   });
+  const [weightGoal, setWeightGoal] = useState(() => {
+    const saved = localStorage.getItem('weightGoal');
+    if (!saved) return 0;
+    const n = parseFloat(saved);
+    return Number.isFinite(n) ? n : 0;
+  });
+  const [weightLog, setWeightLog] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('weightLog');
+    if (!saved) return {};
+    try {
+      const parsed = JSON.parse(saved) as Record<string, unknown>;
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        const num = typeof v === 'number' ? v : parseFloat(String(v));
+        if (Number.isFinite(num) && num > 0) next[k] = ceilToOneDecimal(num);
+      }
+      return next;
+    } catch {
+      return {};
+    }
+  });
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
+  /** Raw text while editing weight goal in Set goals modal (decimals like "165.") */
+  const [weightGoalFieldDraft, setWeightGoalFieldDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [goalsAiLoading, setGoalsAiLoading] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -470,6 +742,15 @@ export default function App() {
     localStorage.setItem('favorites', JSON.stringify(favorites));
     localStorage.setItem('dailyLog', JSON.stringify(dailyLog));
   }, [macros, history, goals, favorites, dailyLog]);
+
+  useEffect(() => {
+    localStorage.setItem('weightLog', JSON.stringify(weightLog));
+    localStorage.setItem('weightGoal', JSON.stringify(weightGoal));
+  }, [weightLog, weightGoal]);
+
+  useEffect(() => {
+    if (isGoalsModalOpen) setWeightGoalFieldDraft(null);
+  }, [isGoalsModalOpen]);
 
   useEffect(() => {
     if (
@@ -744,9 +1025,9 @@ export default function App() {
         onChange={handleFileChange}
       />
       <header className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-4 py-4 shadow-md md:px-8">
-        <h1 className="min-w-0 text-2xl font-semibold leading-tight tracking-tight text-[var(--color-accent)] brand-font">
-          Macro Counter
-        </h1>
+        <div className="min-w-0 flex-1">
+          <SisterAppsTitleMenu currentApp="macrocounter" />
+        </div>
         <SettingsMenu />
       </header>
 
@@ -792,7 +1073,7 @@ export default function App() {
                 type="button"
                 className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
                 onClick={() => setIsGoalsModalOpen(true)}
-                aria-label="Set macro goals"
+                aria-label="Set daily goals (macros and weight goal)"
               >
                 <Target className="h-5 w-5" />
               </button>
@@ -854,6 +1135,14 @@ export default function App() {
             ))}
           </div>
         </section>
+
+        <WeightSection
+          weightLog={weightLog}
+          weightGoal={weightGoal}
+          onLogWeight={(w) => {
+            setWeightLog((prev) => ({ ...prev, [getTodayKey()]: w }));
+          }}
+        />
       </main>
 
       <footer
@@ -1371,10 +1660,10 @@ export default function App() {
       {isGoalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
           <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set Macro Goals</h2>
+            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set daily goals</h2>
             <div className="space-y-4 [&::-webkit-scrollbar]:hidden">
               <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI Goal Setting</h3>
+                <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI daily goals</h3>
                 {goalsAiLoading ? (
                   <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)]">
                     <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
@@ -1404,9 +1693,27 @@ export default function App() {
                               },
                             ],
                           });
-                          const result = JSON.parse(text);
+                          const result = JSON.parse(text) as Record<string, unknown>;
                           setGoals(normalizeAiMacros(result));
-                          toast.success("Macro goals updated via AI");
+                          const cw = parseOptionalAiWeightLb(result.currentWeightLb);
+                          const tw = parseOptionalAiWeightLb(result.targetWeightLb);
+                          if (cw != null) {
+                            setWeightLog((prev) => ({
+                              ...prev,
+                              [getTodayKey()]: cw,
+                            }));
+                          }
+                          if (tw != null) {
+                            setWeightGoal(tw);
+                          }
+                          const parts = ['Daily goals updated via AI.'];
+                          if (cw != null) {
+                            parts.push(`Logged current weight (${formatMacroAmount(cw)} lb).`);
+                          }
+                          if (tw != null) {
+                            parts.push(`Set goal weight (${formatMacroAmount(tw)} lb).`);
+                          }
+                          toast.success(parts.join(' '));
                         } catch (error) {
                           console.error("Error generating goals:", error);
                           toastAiConfigError(error, 'Could not generate goals.');
@@ -1442,9 +1749,36 @@ export default function App() {
                   />
                 </div>
               ))}
+              <div className="flex items-center gap-4">
+                <label htmlFor="goal-weight-lb" className="w-24 text-[var(--color-text-light)]">
+                  Weight goal
+                </label>
+                <input
+                  id="goal-weight-lb"
+                  name="goal_weight_lb"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="lb"
+                  value={
+                    weightGoalFieldDraft !== null
+                      ? weightGoalFieldDraft
+                      : weightGoal > 0
+                        ? formatMacroAmount(weightGoal)
+                        : ''
+                  }
+                  onChange={(e) => {
+                    const s = sanitizeMacroAmountRaw(e.target.value);
+                    setWeightGoalFieldDraft(s);
+                    setWeightGoal(parseMacroAmountInput(s));
+                  }}
+                  onBlur={() => setWeightGoalFieldDraft(null)}
+                  className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg tabular-nums"
+                />
+              </div>
               <button 
                 className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full font-medium hover:bg-[var(--color-accent-hover)] transition"
-                onClick={() => {setIsGoalsModalOpen(false); toast.success("Macro goals updated");}}
+                onClick={() => {setIsGoalsModalOpen(false); toast.success("Daily goals saved");}}
               >
                 Save
               </button>

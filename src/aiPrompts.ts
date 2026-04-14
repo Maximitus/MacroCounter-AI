@@ -17,6 +17,18 @@ const MEAL_ITEM_SHAPE =
 
 const MACRO_TOTAL_SHAPE = '{ "calories": number, "protein": number, "carbs": number, "fat": number }';
 
+/** Macro goals response may include weights the user mentioned (pounds). */
+const MACRO_GOALS_AI_SHAPE = [
+  '{',
+  '  "calories": number,',
+  '  "protein": number,',
+  '  "carbs": number,',
+  '  "fat": number,',
+  '  "currentWeightLb": number | null,',
+  '  "targetWeightLb": number | null',
+  '}',
+].join('\n');
+
 /** Per-item analysis from a text description (main “Analyze” flow). */
 export function promptMealItemsFromDescription(userDescription: string): string {
   const desc = JSON.stringify(userDescription);
@@ -91,8 +103,13 @@ export function promptDailyMacroGoals(userNotes: string): string {
     'From the user notes, infer appropriate daily calories, protein (g), carbs (g), and fat (g).',
     'Use evidence-informed ranges: prioritize adequate protein, balanced fat, and carbs that fit the stated goal (e.g. fat loss, maintenance, muscle gain) when inferable.',
     'If age, sex, weight, height, or activity are missing, assume typical values consistent with the goal and reflect that in reasonable round numbers.',
+    '',
+    'Also read the notes for body weight. All weights in the JSON must be in pounds (lb).',
+    '- If the user states their current body weight (e.g. "I weigh 180", "currently 82 kg"), set currentWeightLb to that value converted to pounds when needed (1 kg ≈ 2.20462 lb). Use null if not stated.',
+    '- If the user states a target or goal weight (e.g. "want to get to 165", "goal 75 kg"), set targetWeightLb similarly in pounds. Use null if not stated.',
+    '- Use one decimal when helpful; avoid inventing weights that were not implied.',
     JSON_ONLY,
-    `Output shape: ${MACRO_TOTAL_SHAPE}`,
+    `Output shape: ${MACRO_GOALS_AI_SHAPE}`,
     '',
     `User notes: ${notes}`,
   ].join('\n');

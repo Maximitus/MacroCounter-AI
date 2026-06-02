@@ -94,6 +94,62 @@ export function promptAggregateMacrosFromImage(): string {
   ].join('\n');
 }
 
+/** Snack recommendation from on-hand ingredients + remaining daily macro budget. */
+const SNACK_AI_SHAPE = [
+  '{',
+  '  "name": string,',
+  '  "ingredientsUsed": [{ "name": string, "amount": string }],',
+  '  "instructions": string,',
+  '  "macros": { "calories": number, "protein": number, "carbs": number, "fat": number },',
+  '  "notes": string',
+  '}',
+].join('\n');
+
+export function promptSnackFromIngredients(args: {
+  availableIngredients: string[];
+  remainingCalories: number;
+  remainingProtein: number;
+  remainingCarbs: number;
+  remainingFat: number;
+}): string {
+  const payload = JSON.stringify({
+    availableIngredients: args.availableIngredients,
+    remainingBudget: {
+      calories: Math.max(0, Math.round(args.remainingCalories)),
+      protein: Math.max(0, Math.round(args.remainingProtein)),
+      carbs: Math.max(0, Math.round(args.remainingCarbs)),
+      fat: Math.max(0, Math.round(args.remainingFat)),
+    },
+  });
+  return [
+    'You are a practical nutrition coach helping a user pick a small snack that fits their remaining daily macro budget.',
+    '',
+    'Hard constraints:',
+    '- Use ONLY ingredients from `availableIngredients`. Do not invent ingredients the user did not list.',
+    '- Snack `macros.calories` MUST be at or below `remainingBudget.calories`. Aim for roughly 60-90% of that budget unless a smaller portion clearly makes more sense.',
+    '- The snack should be assemblable in under 5 minutes with no real cooking unless eggs/oats/protein powder etc. are available.',
+    '',
+    'Soft preferences:',
+    '- If `remainingBudget.protein` > 0, prefer a snack that provides a meaningful share of it (target close to remainingProtein/4 grams or more) WITHOUT exceeding the calorie budget.',
+    '- Prefer minimally processed, satisfying combinations (e.g. protein + fiber).',
+    '- Realistic everyday portions (cups, tbsp, oz, pieces). Put exact amount in `ingredientsUsed[i].amount`.',
+    '',
+    'Output:',
+    '- `name`: short, descriptive snack name (e.g. "Apple + peanut butter").',
+    '- `instructions`: 1-4 short sentences on how to assemble.',
+    '- `macros`: totals for the whole snack in the same units as the user (kcal, grams).',
+    '- `notes`: optional one-line tip (protein boost, swap, etc.). Empty string if nothing useful to add.',
+    '',
+    'If NO feasible snack exists from these ingredients within the calorie budget, return name="" and ingredientsUsed=[] with zero macros and a short reason in `notes`.',
+    ENERGY_CHECK,
+    GRAMS_RULE,
+    JSON_ONLY,
+    `Output shape: ${SNACK_AI_SHAPE}`,
+    '',
+    `Inputs: ${payload}`,
+  ].join('\n');
+}
+
 /** Daily macro goal suggestions from free-form user notes. */
 export function promptDailyMacroGoals(userNotes: string): string {
   const notes = JSON.stringify(userNotes);

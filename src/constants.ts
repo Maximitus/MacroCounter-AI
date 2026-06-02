@@ -6,3 +6,47 @@ export const COMMON_MEALS = [
   { name: 'Banana (Medium)', macros: { calories: 105, protein: 1.3, carbs: 27, fat: 0.4 } },
   { name: 'Almonds (1 oz)', macros: { calories: 164, protein: 6, carbs: 6, fat: 14 } },
 ];
+
+/**
+ * Common pantry / fridge ingredients shown as toggleable chips
+ * in the "I need a snack" helper. Keep generic, label cleanly.
+ */
+export const SNACK_INGREDIENTS = [
+  'Greek yogurt',
+  'Cottage cheese',
+  'Milk',
+  'Cheese',
+  'Eggs',
+  'Peanut butter',
+  'Almond butter',
+  'Almonds',
+  'Walnuts',
+  'Trail mix',
+  'Dark chocolate',
+  'Banana',
+  'Apple',
+  'Berries',
+  'Orange',
+  'Grapes',
+  'Avocado',
+  'Carrots',
+  'Celery',
+  'Cucumber',
+  'Bell pepper',
+  'Hummus',
+  'Salsa',
+  'Bread',
+  'Tortilla',
+  'Rice cakes',
+  'Crackers',
+  'Oats',
+  'Granola',
+  'Honey',
+  'Tuna',
+  'Chicken breast',
+  'Deli turkey',
+  'Beef jerky',
+  'Protein powder',
+  'Edamame',
+  'Popcorn',
+];

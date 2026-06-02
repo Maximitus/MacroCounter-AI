@@ -20,6 +20,7 @@ import {
   Target,
   Scale,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -31,7 +32,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { COMMON_MEALS } from './constants';
+import { COMMON_MEALS, SNACK_INGREDIENTS } from './constants';
 import toast, { Toaster } from 'react-hot-toast';
 import {
   promptAggregateMacrosFromDescription,
@@ -39,6 +40,7 @@ import {
   promptDailyMacroGoals,
   promptMealItemsFromDescription,
   promptMealItemsFromImage,
+  promptSnackFromIngredients,
 } from './aiPrompts';
 import { generateContentJson } from './geminiBridge';
 import { SettingsMenu } from './SettingsMenu.tsx';
@@ -709,6 +711,17 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'manual' | 'ai' | 'picture'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
+  const [addMealChooserOpen, setAddMealChooserOpen] = useState(false);
+  const [snackOpen, setSnackOpen] = useState(false);
+  const [snackIngredients, setSnackIngredients] = useState<string[]>([]);
+  const [snackLoading, setSnackLoading] = useState(false);
+  const [snackResult, setSnackResult] = useState<{
+    name: string;
+    ingredientsUsed: { name: string; amount: string }[];
+    instructions: string;
+    macros: typeof manualMacros;
+    notes: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -761,7 +774,9 @@ export default function App() {
       calendarOpen ||
       describeOpen ||
       manualEntryOpen ||
-      aiReview
+      aiReview ||
+      addMealChooserOpen ||
+      snackOpen
     ) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -777,6 +792,8 @@ export default function App() {
     describeOpen,
     manualEntryOpen,
     aiReview,
+    addMealChooserOpen,
+    snackOpen,
   ]);
 
   type ManualMacroKey = keyof typeof manualMacros;
@@ -888,6 +905,97 @@ export default function App() {
     );
     setEditingFavoriteIndex(null);
     toast.success('Favorite updated');
+  };
+
+  const toggleSnackIngredient = (name: string) => {
+    setSnackIngredients((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  };
+
+  const openSnackHelper = () => {
+    setSnackResult(null);
+    setSnackOpen(true);
+  };
+
+  const handleGenerateSnack = async () => {
+    if (snackIngredients.length === 0) {
+      toast.error('Pick at least one ingredient you have on hand.');
+      return;
+    }
+    const remainingCalories = goals.calories - macros.calories;
+    if (remainingCalories <= 0) {
+      toast.error("You're already at or past your calorie goal for today.");
+      return;
+    }
+    const remainingProtein = goals.protein - macros.protein;
+    const remainingCarbs = goals.carbs - macros.carbs;
+    const remainingFat = goals.fat - macros.fat;
+    setSnackLoading(true);
+    setSnackResult(null);
+    try {
+      const text = await generateContentJson({
+        parts: [
+          {
+            text: promptSnackFromIngredients({
+              availableIngredients: snackIngredients,
+              remainingCalories,
+              remainingProtein,
+              remainingCarbs,
+              remainingFat,
+            }),
+          },
+        ],
+      });
+      const raw = JSON.parse(text) as {
+        name?: unknown;
+        ingredientsUsed?: unknown;
+        instructions?: unknown;
+        macros?: unknown;
+        notes?: unknown;
+      };
+      const name = String(raw.name ?? '').trim();
+      const macrosOut = normalizeAiMacros(
+        (raw.macros as Partial<Record<keyof typeof manualMacros, unknown>>) ?? {},
+      );
+      const ingredientsUsed = Array.isArray(raw.ingredientsUsed)
+        ? raw.ingredientsUsed
+            .map((it) => {
+              const obj = (it ?? {}) as { name?: unknown; amount?: unknown };
+              return {
+                name: String(obj.name ?? '').trim(),
+                amount: String(obj.amount ?? '').trim(),
+              };
+            })
+            .filter((it) => it.name)
+        : [];
+      const instructions = String(raw.instructions ?? '').trim();
+      const notes = String(raw.notes ?? '').trim();
+      if (!name || macrosOut.calories <= 0) {
+        toast.error(
+          notes ||
+            "Couldn't put together a snack from those ingredients within your remaining calories.",
+        );
+        return;
+      }
+      if (macrosOut.calories > remainingCalories + 0.5) {
+        toast.error('AI suggestion exceeded your remaining calories — try again or pick different ingredients.');
+        return;
+      }
+      setSnackResult({ name, ingredientsUsed, instructions, macros: macrosOut, notes });
+    } catch (error) {
+      console.error('Error generating snack:', error);
+      toastAiConfigError(error, 'Could not generate a snack suggestion.');
+    } finally {
+      setSnackLoading(false);
+    }
+  };
+
+  const acceptSnack = () => {
+    if (!snackResult) return;
+    addMeal(snackResult.name, snackResult.macros);
+    setSnackResult(null);
+    setSnackOpen(false);
   };
 
   const handleTextAnalysis = async () => {
@@ -1133,6 +1241,15 @@ export default function App() {
                 </div>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={() => setAddMealChooserOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-accent)]/40 bg-[var(--color-bg-dark)]/60 p-4 text-sm font-semibold text-[var(--color-accent)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-panel-hover)] hover:text-fg"
+              aria-label="Add a meal"
+            >
+              <Plus className="h-5 w-5" aria-hidden />
+              Add meal
+            </button>
           </div>
         </section>
 
@@ -1551,6 +1668,262 @@ export default function App() {
           </div>
         </div>
       )}
+      {addMealChooserOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+          onClick={() => setAddMealChooserOpen(false)}
+        >
+          <div
+            className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-fg brand-font">Add a meal</h2>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+                onClick={() => setAddMealChooserOpen(false)}
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                onClick={() => {
+                  setAddMealChooserOpen(false);
+                  setDescribeOpen(true);
+                }}
+              >
+                <MessageSquare className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-semibold text-fg">Describe</span>
+                <span className="text-xs text-[var(--color-text-light)]">Tell the AI what you ate</span>
+              </button>
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                onClick={() => {
+                  setAddMealChooserOpen(false);
+                  openNativeCamera();
+                }}
+              >
+                <Camera className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-semibold text-fg">Picture</span>
+                <span className="text-xs text-[var(--color-text-light)]">Snap or upload a photo</span>
+              </button>
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                onClick={() => {
+                  setAddMealChooserOpen(false);
+                  setManualEntryOpen(true);
+                }}
+              >
+                <ClipboardList className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-semibold text-fg">Manual</span>
+                <span className="text-xs text-[var(--color-text-light)]">Favorites or type macros</span>
+              </button>
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                onClick={() => {
+                  setAddMealChooserOpen(false);
+                  openSnackHelper();
+                }}
+              >
+                <Sparkles className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-semibold text-fg">Snack helper</span>
+                <span className="text-xs text-[var(--color-text-light)]">Fits your remaining macros</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {snackOpen && (() => {
+        const remainingCalories = Math.max(0, goals.calories - macros.calories);
+        const remainingProtein = Math.max(0, goals.protein - macros.protein);
+        const overCalories = goals.calories > 0 && macros.calories >= goals.calories;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => {
+              if (!snackLoading) {
+                setSnackOpen(false);
+                setSnackResult(null);
+              }
+            }}
+          >
+            <div
+              className="glass max-h-[min(92vh,44rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-fg brand-font">
+                    <Sparkles className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
+                    I need a snack
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--color-text-light)]">
+                    Toggle what you have on hand. We&apos;ll suggest something that fits your remaining macros.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg disabled:opacity-40"
+                  onClick={() => {
+                    setSnackOpen(false);
+                    setSnackResult(null);
+                  }}
+                  disabled={snackLoading}
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mb-4 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-3 text-xs text-[var(--color-text-light)]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Remaining today:{' '}
+                    <span className={`font-semibold tabular-nums ${overCalories ? 'text-red-300' : 'text-fg'}`}>
+                      {formatMacroAmount(remainingCalories)} kcal
+                    </span>
+                  </span>
+                  <span>
+                    Protein left:{' '}
+                    <span className="font-semibold tabular-nums text-fg">
+                      {formatMacroAmount(remainingProtein)} g
+                    </span>
+                  </span>
+                </div>
+                {overCalories && (
+                  <p className="mt-2 text-red-300">
+                    You&apos;re already at your calorie goal — try water, tea, or veggies.
+                  </p>
+                )}
+              </div>
+
+              {!snackResult && (
+                <>
+                  <div className="mb-2 flex items-center justify-between text-xs text-[var(--color-text-light)]">
+                    <span>What do you have? ({snackIngredients.length} selected)</span>
+                    {snackIngredients.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-[var(--color-accent)] hover:underline"
+                        onClick={() => setSnackIngredients([])}
+                        disabled={snackLoading}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="mb-5 flex flex-wrap gap-2">
+                    {SNACK_INGREDIENTS.map((ing) => {
+                      const active = snackIngredients.includes(ing);
+                      return (
+                        <button
+                          key={ing}
+                          type="button"
+                          onClick={() => toggleSnackIngredient(ing)}
+                          disabled={snackLoading}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+                            active
+                              ? 'border-transparent bg-[var(--color-accent)] text-white shadow-sm'
+                              : 'border-[var(--color-accent)]/25 bg-[var(--color-surface)] text-[var(--color-text-light)] hover:border-[var(--color-accent)]/50 hover:text-fg'
+                          }`}
+                          aria-pressed={active}
+                        >
+                          {ing}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--color-accent)] py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                    onClick={() => void handleGenerateSnack()}
+                    disabled={
+                      snackLoading || snackIngredients.length === 0 || overCalories
+                    }
+                  >
+                    {snackLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        Thinking…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" aria-hidden />
+                        Suggest a snack
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+
+              {snackResult && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-4">
+                    <h3 className="text-base font-bold text-fg brand-font">{snackResult.name}</h3>
+                    <p className="mt-1 text-xs tabular-nums text-[var(--color-text-light)]">
+                      {formatMacroAmount(snackResult.macros.calories)} kcal ·{' '}
+                      {formatMacroAmount(snackResult.macros.protein)}g P ·{' '}
+                      {formatMacroAmount(snackResult.macros.carbs)}g C ·{' '}
+                      {formatMacroAmount(snackResult.macros.fat)}g F
+                    </p>
+                    {snackResult.ingredientsUsed.length > 0 && (
+                      <ul className="mt-3 space-y-1 text-sm text-fg">
+                        {snackResult.ingredientsUsed.map((it, i) => (
+                          <li key={`${it.name}-${i}`} className="flex justify-between gap-3">
+                            <span>{it.name}</span>
+                            <span className="text-[var(--color-text-light)]">{it.amount}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {snackResult.instructions && (
+                      <p className="mt-3 whitespace-pre-line text-sm text-[var(--color-text-light)]">
+                        {snackResult.instructions}
+                      </p>
+                    )}
+                    {snackResult.notes && (
+                      <p className="mt-2 text-xs italic text-[var(--color-text-light)]">
+                        {snackResult.notes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-surface)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-60"
+                      onClick={() => void handleGenerateSnack()}
+                      disabled={snackLoading}
+                    >
+                      {snackLoading ? 'Thinking…' : 'Try another'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[var(--color-accent)] py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                      onClick={acceptSnack}
+                      disabled={snackLoading}
+                    >
+                      Add to log
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {editingMealId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
           <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">

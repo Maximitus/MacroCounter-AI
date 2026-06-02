@@ -1110,7 +1110,7 @@ export default function App() {
           })()}
         </section>
 
-        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
+        <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow relative z-20">
           <h2 className="text-xl font-semibold mb-6 text-fg brand-font">Meal History</h2>
           <div className="space-y-2">
             {history.map((meal) => (

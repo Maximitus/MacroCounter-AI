@@ -27,6 +27,6 @@ Macro Counter is deployed at **`/macrocounter/`** (Vite `base: '/macrocounter/'`
 
 - `public/manifest.webmanifest` scopes the install to **`/macrocounter/`** only. Without this, an old install can hijack the whole domain (e.g. `/workout/` opening Macro Counter).
 - Launcher icons: run `npm run icons` after changing `public/icons/*.svg`; commit the generated PNGs under `public/icons/`.
-- Details: [docs/ui-specs/PWA_AND_ANDROID_ICONS.md](docs/ui-specs/PWA_AND_ANDROID_ICONS.md).
+- Details: [docs/ui-specs/UI_SPEC.md](docs/ui-specs/UI_SPEC.md) (§ PWA and Android icons).
 
 **After deploying manifest/icon fixes:** users should **uninstall** the old home-screen Macro Counter app, then reinstall from `https://maxmvs.com/macrocounter/` so scope and maskable icons apply.

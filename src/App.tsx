@@ -44,7 +44,6 @@ import {
 } from './aiPrompts';
 import { generateContentJson } from './geminiBridge';
 import { SettingsMenu } from './SettingsMenu.tsx';
-import { SisterAppsTitleMenu } from './SisterAppsTitleMenu.tsx';
 import {
   ceilToOneDecimal,
   formatMacroAmount,
@@ -1187,9 +1186,9 @@ export default function App() {
         onChange={handleFileChange}
       />
       <header className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-4 py-4 shadow-md md:px-8">
-        <div className="min-w-0 flex-1">
-          <SisterAppsTitleMenu currentApp="macrocounter" />
-        </div>
+        <h1 className="min-w-0 flex-1 text-2xl font-semibold leading-tight tracking-tight text-[var(--color-accent)] brand-font">
+          Macro Counter
+        </h1>
         <SettingsMenu />
       </header>
 

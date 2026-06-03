@@ -18,3 +18,15 @@ View your app in AI Studio: https://ai.studio/apps/fb862a6c-295f-479d-8108-46805
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Distribution (maxmvs.com toolbox)
+
+Macro Counter is deployed at **`/macrocounter/`** (Vite `base: '/macrocounter/'`) alongside sister apps on [maxmvs.com](https://maxmvs.com).
+
+### PWA manifest and icons
+
+- `public/manifest.webmanifest` scopes the install to **`/macrocounter/`** only. Without this, an old install can hijack the whole domain (e.g. `/workout/` opening Macro Counter).
+- Launcher icons: run `npm run icons` after changing `public/icons/*.svg`; commit the generated PNGs under `public/icons/`.
+- Details: [docs/ui-specs/PWA_AND_ANDROID_ICONS.md](docs/ui-specs/PWA_AND_ANDROID_ICONS.md).
+
+**After deploying manifest/icon fixes:** users should **uninstall** the old home-screen Macro Counter app, then reinstall from `https://maxmvs.com/macrocounter/` so scope and maskable icons apply.

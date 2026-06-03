@@ -1,0 +1,25 @@
+{
+  "id": "/macrocounter/",
+  "name": "Macro Counter",
+  "short_name": "Macros",
+  "description": "Track daily macros, meals, and weight with AI-assisted logging.",
+  "start_url": "/macrocounter/",
+  "scope": "/macrocounter/",
+  "display": "standalone",
+  "background_color": "#2a3439",
+  "theme_color": "#ff8800",
+  "icons": [
+    {
+      "src": "/macrocounter/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/macrocounter/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

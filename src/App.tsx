@@ -324,6 +324,18 @@ function parseOptionalAiWeightLb(value: unknown): number | null {
   return ceilToOneDecimal(n);
 }
 
+type WeightUnit = 'lb' | 'kg';
+
+const LB_PER_KG = 2.2046226218;
+
+function weightFromLb(lb: number, unit: WeightUnit): number {
+  return unit === 'lb' ? ceilToOneDecimal(lb) : ceilToOneDecimal(lb / LB_PER_KG);
+}
+
+function weightToLb(value: number, unit: WeightUnit): number {
+  return unit === 'lb' ? ceilToOneDecimal(value) : ceilToOneDecimal(value * LB_PER_KG);
+}
+
 function WeightSection({
   weightLog,
   weightGoal,
@@ -335,12 +347,25 @@ function WeightSection({
 }) {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [logDraft, setLogDraft] = useState('');
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(() => {
+    const saved = localStorage.getItem('weightUnit');
+    return saved === 'kg' ? 'kg' : 'lb';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('weightUnit', weightUnit);
+  }, [weightUnit]);
 
   const latest = getLatestWeight(weightLog);
   const chartData = buildWeightChartData(weightLog);
+  const displayChartData = chartData.map((p) => ({
+    ...p,
+    weight: weightFromLb(p.weight, weightUnit),
+  }));
 
-  const weights = chartData.map((p) => p.weight);
-  const goalForDomain = weightGoal > 0 ? ceilToOneDecimal(weightGoal) : null;
+  const weights = displayChartData.map((p) => p.weight);
+  const goalForDomain =
+    weightGoal > 0 ? weightFromLb(ceilToOneDecimal(weightGoal), weightUnit) : null;
   const minData = weights.length ? Math.min(...weights) : null;
   const maxData = weights.length ? Math.max(...weights) : null;
   let yDomain: [number, number] | undefined;
@@ -354,15 +379,28 @@ function WeightSection({
   }
 
   const handleLog = () => {
-    const w = parseMacroAmountInput(logDraft);
-    if (!(w > 0)) {
+    const entered = parseMacroAmountInput(logDraft);
+    if (!(entered > 0)) {
       toast.error('Enter a weight greater than zero.');
       return;
     }
-    onLogWeight(ceilToOneDecimal(w));
+    onLogWeight(weightToLb(entered, weightUnit));
     setLogDraft('');
     toast.success('Weight logged');
     setLogModalOpen(false);
+  };
+
+  const toggleWeightUnit = () => {
+    setWeightUnit((u) => {
+      const next: WeightUnit = u === 'lb' ? 'kg' : 'lb';
+      if (logDraft) {
+        const val = parseMacroAmountInput(logDraft);
+        if (val > 0) {
+          setLogDraft(String(weightFromLb(weightToLb(val, u), next)));
+        }
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -382,19 +420,21 @@ function WeightSection({
             Weight
           </h2>
           <div className="flex shrink-0 items-center gap-2">
-            <span
-              className="text-right tabular-nums"
+            <button
+              type="button"
+              className="w-fit shrink-0 rounded-lg text-right tabular-nums text-fg transition hover:text-[var(--color-accent)] active:opacity-80"
+              onClick={toggleWeightUnit}
               aria-label={
                 latest != null
-                  ? `Most recent weight ${formatMacroAmount(latest)} pounds`
-                  : 'No weight logged yet'
+                  ? `Most recent weight ${formatMacroAmount(weightFromLb(latest, weightUnit))} ${weightUnit}. Tap to show ${weightUnit === 'lb' ? 'kilograms' : 'pounds'}.`
+                  : `No weight logged. Tap to show ${weightUnit === 'lb' ? 'kilograms' : 'pounds'}.`
               }
             >
-              <span className="text-lg font-bold text-fg">
-                {latest != null ? formatMacroAmount(latest) : '—'}
+              <span className="text-lg font-bold">
+                {latest != null ? formatMacroAmount(weightFromLb(latest, weightUnit)) : '—'}
               </span>
-              <span className="text-xs font-medium text-[var(--color-text-light)]"> lb</span>
-            </span>
+              <span className="text-xs font-medium"> {weightUnit}</span>
+            </button>
             <button
               type="button"
               className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
@@ -407,14 +447,14 @@ function WeightSection({
         </div>
 
         <div>
-          {chartData.length === 0 ? (
+          {displayChartData.length === 0 ? (
             <p className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] py-6 text-center text-sm text-[var(--color-text-light)]">
               Log weight on one or more days to see the chart. Use the log button above to add an entry.
             </p>
           ) : (
             <div className="h-44 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <LineChart data={displayChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--color-accent)" strokeOpacity={0.12} vertical={false} />
                   <XAxis
                     dataKey="label"
@@ -440,7 +480,10 @@ function WeightSection({
                       const p = payload?.[0]?.payload as { key?: string } | undefined;
                       return p?.key ? p.key : '';
                     }}
-                    formatter={(value: number) => [`${formatMacroAmount(value)} lb`, 'Weight']}
+                    formatter={(value: number) => [
+                      `${formatMacroAmount(value)} ${weightUnit}`,
+                      'Weight',
+                    ]}
                   />
                   {goalForDomain != null && (
                     <ReferenceLine
@@ -488,7 +531,7 @@ function WeightSection({
             <div className="space-y-4">
               <div>
                 <label htmlFor="weight-log-input-modal" className="text-xs font-medium text-[var(--color-text-light)]">
-                  Today&apos;s weight (lb)
+                  Today&apos;s weight ({weightUnit})
                 </label>
                 <input
                   id="weight-log-input-modal"
@@ -496,7 +539,7 @@ function WeightSection({
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
-                  placeholder="e.g. 175.4"
+                  placeholder={weightUnit === 'lb' ? 'e.g. 175.4' : 'e.g. 79.5'}
                   value={logDraft}
                   onChange={(e) => setLogDraft(sanitizeMacroAmountRaw(e.target.value))}
                   onKeyDown={(e) => {
@@ -569,6 +612,17 @@ function summarizeAiMealItems(items: unknown): {
 
 type MacroTotals = { calories: number; protein: number; carbs: number; fat: number };
 type TotalsView = 'daily' | 'weekly' | 'monthly';
+
+const TOTALS_VIEWS: TotalsView[] = ['daily', 'weekly', 'monthly'];
+
+function totalsViewLabel(view: TotalsView): string {
+  return view === 'daily' ? 'Daily' : view === 'weekly' ? 'Weekly' : 'Monthly';
+}
+
+function nextTotalsView(view: TotalsView): TotalsView {
+  const i = TOTALS_VIEWS.indexOf(view);
+  return TOTALS_VIEWS[(i + 1) % TOTALS_VIEWS.length]!;
+}
 
 const ZERO_MACROS: MacroTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
@@ -1142,33 +1196,15 @@ export default function App() {
       <main className="grid gap-6 px-4 pt-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:px-8 md:pt-5">
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow">
           <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="min-w-0 flex-1 text-xl font-semibold text-fg brand-font">
-              {totalsView === 'daily' ? 'Daily' : totalsView === 'weekly' ? 'Weekly' : 'Monthly'} Totals
-            </h2>
+            <button
+              type="button"
+              className="w-fit shrink-0 rounded-lg text-xl font-semibold text-fg brand-font transition hover:text-[var(--color-accent)] active:opacity-80"
+              onClick={() => setTotalsView((v) => nextTotalsView(v))}
+              aria-label={`${totalsViewLabel(totalsView)} totals. Tap to switch to ${totalsViewLabel(nextTotalsView(totalsView))}.`}
+            >
+              {totalsViewLabel(totalsView)} Totals
+            </button>
             <div className="flex shrink-0 items-center gap-2">
-              <div role="tablist" aria-label="Totals period">
-                <div className="inline-flex gap-0.5 rounded-full bg-[var(--color-surface)] p-0.5">
-                  {(['daily', 'weekly', 'monthly'] as const).map((view) => {
-                    const short =
-                      view === 'daily' ? 'D' : view === 'weekly' ? 'W' : 'M';
-                    const label =
-                      view === 'daily' ? 'Daily' : view === 'weekly' ? 'Weekly' : 'Monthly';
-                    return (
-                      <button
-                        key={view}
-                        type="button"
-                        role="tab"
-                        aria-label={`${label} totals`}
-                        aria-selected={totalsView === view}
-                        className={`min-w-[1.875rem] rounded-full px-2 py-1 text-xs font-semibold tabular-nums transition sm:min-w-[2rem] sm:px-2.5 ${totalsView === view ? 'bg-[var(--color-accent)] text-white shadow-sm' : 'text-[var(--color-text-light)] hover:text-fg'}`}
-                        onClick={() => setTotalsView(view)}
-                      >
-                        {short}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
               <button
                 type="button"
                 className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"

@@ -6,7 +6,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Moon, Settings, Sun } from 'lucide-react';
-import { ACCENT_PRESETS, useTheme } from './theme.tsx';
+import {AccountSection} from './auth/AccountSection.tsx';
+import {MacroSocialSection} from './social/MacroSocialSection.tsx';
+import {ACCENT_PRESETS, useTheme} from './theme.tsx';
 
 export function SettingsMenu() {
   const { theme, setTheme, accentId, setAccentId } = useTheme();
@@ -130,6 +132,8 @@ export function SettingsMenu() {
                 </div>
               </div>
 
+              <AccountSection />
+              <MacroSocialSection />
             </div>
 
             <button

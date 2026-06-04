@@ -43,7 +43,11 @@ import {
   promptSnackFromIngredients,
 } from './aiPrompts';
 import { generateContentJson } from './geminiBridge';
-import { SettingsMenu } from './SettingsMenu.tsx';
+import {useAuth} from './auth/AuthContext.tsx';
+import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
+import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import {SettingsMenu} from './SettingsMenu.tsx';
+import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
 import {
   ceilToOneDecimal,
   formatMacroAmount,
@@ -679,6 +683,8 @@ function getPeriodGoals(dailyGoals: MacroTotals, view: TotalsView): MacroTotals 
 }
 
 export default function App() {
+  const {user, loading: authLoading} = useAuth();
+
   const [macros, setMacros] = useState(() => {
     const saved = localStorage.getItem('macros');
     return saved ? JSON.parse(saved) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -777,11 +783,37 @@ export default function App() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [lastUpdatedDate, setLastUpdatedDate] = useState(() => {
+    return localStorage.getItem('lastUpdatedDate') ?? new Date().toDateString();
+  });
+
+  const {cloudEnabled, syncing: cloudSyncing} = useMacroCloudSync({
+    user,
+    authLoading,
+    macros,
+    goals,
+    dailyLog,
+    weightGoal,
+    weightLog,
+    favorites,
+    history,
+    lastUpdatedDate,
+    setMacros,
+    setGoals,
+    setDailyLog,
+    setWeightGoal,
+    setWeightLog,
+    setFavorites,
+    setHistory,
+    setLastUpdatedDate,
+  });
+
+  usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
 
   useEffect(() => {
-    const lastDate = localStorage.getItem('lastUpdatedDate');
+    const lastDate = lastUpdatedDate;
     const today = new Date().toDateString();
-    
+
     if (lastDate !== today) {
       if (lastDate) {
         const prevDate = new Date(lastDate);
@@ -797,22 +829,25 @@ export default function App() {
       }
       setMacros({ calories: 0, protein: 0, carbs: 0, fat: 0 });
       setHistory([]);
-      localStorage.setItem('lastUpdatedDate', today);
+      setLastUpdatedDate(today);
+      if (!cloudEnabled) localStorage.setItem('lastUpdatedDate', today);
     }
-  }, []);
+  }, [lastUpdatedDate, cloudEnabled]);
 
   useEffect(() => {
+    if (cloudEnabled) return;
     localStorage.setItem('macros', JSON.stringify(macros));
     localStorage.setItem('history', JSON.stringify(history));
     localStorage.setItem('goals', JSON.stringify(goals));
     localStorage.setItem('favorites', JSON.stringify(favorites));
     localStorage.setItem('dailyLog', JSON.stringify(dailyLog));
-  }, [macros, history, goals, favorites, dailyLog]);
+  }, [macros, history, goals, favorites, dailyLog, cloudEnabled]);
 
   useEffect(() => {
+    if (cloudEnabled) return;
     localStorage.setItem('weightLog', JSON.stringify(weightLog));
     localStorage.setItem('weightGoal', JSON.stringify(weightGoal));
-  }, [weightLog, weightGoal]);
+  }, [weightLog, weightGoal, cloudEnabled]);
 
   useEffect(() => {
     if (isGoalsModalOpen) setWeightGoalFieldDraft(null);
@@ -1164,6 +1199,7 @@ export default function App() {
   };
 
   return (
+    <MacroCloudSyncProvider value={{cloudEnabled, syncing: cloudSyncing}}>
     <div className="min-h-screen bg-[var(--color-bg-dark)] text-fg font-sans blueprint-bg">
       <Toaster />
       <input
@@ -2277,5 +2313,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </MacroCloudSyncProvider>
   );
 }

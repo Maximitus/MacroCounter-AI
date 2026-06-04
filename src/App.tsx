@@ -2220,13 +2220,23 @@ export default function App() {
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {MACRO_ORDER.map((key) => {
                     const unit = key === 'calories' ? 'kcal' : 'g';
+                    const macroColor = MACRO_RING_COLORS[key];
                     return (
                       <div
                         key={key}
                         className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 text-center"
+                        style={{ boxShadow: `inset 0 2px 0 0 ${macroColor}` }}
                       >
-                        <p className="text-xs font-medium capitalize text-[var(--color-text-light)]">{key}</p>
-                        <p className="mt-1 text-lg font-bold tabular-nums text-fg">
+                        <p
+                          className="text-xs font-medium capitalize"
+                          style={{ color: macroColor }}
+                        >
+                          {key}
+                        </p>
+                        <p
+                          className="mt-1 text-lg font-bold tabular-nums"
+                          style={{ color: macroColor }}
+                        >
                           {formatMacroAmount(aiReview.macros[key])}
                           <span className="ml-0.5 text-sm font-normal text-[var(--color-text-light)]">{unit}</span>
                         </p>

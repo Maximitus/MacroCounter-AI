@@ -4,10 +4,14 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+# Local secrets (GEMINI_API_KEY, etc.) — store keys in these files only; never commit them
 .env*
 !.env.example
+.env.local
 
-# wrangler files
+# wrangler local secrets (GEMINI_API_KEY for `npm run dev`)
 .wrangler
+.dev.vars
 .dev.vars*
 !.dev.vars.example

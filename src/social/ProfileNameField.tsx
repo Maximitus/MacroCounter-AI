@@ -24,37 +24,36 @@ export function ProfileNameField() {
   }
 
   return (
-    <div className="space-y-2 border-t border-[var(--color-accent)]/10 pt-4">
-      <p className="text-sm font-medium text-fg">Profile name</p>
-      <p className="text-xs text-[#9ca3af]">
-        Friends see this on Macro Counter and Workout (same account).
-      </p>
-      <input
-        type="text"
-        maxLength={32}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Your display name"
-        className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
-      />
-      <button
-        type="button"
-        disabled={busy || !name.trim()}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await saveDisplayName(name);
-            toast.success('Profile name saved');
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Could not save');
-          } finally {
-            setBusy(false);
-          }
-        }}
-        className="w-full rounded-full bg-[var(--color-surface)] py-2.5 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-50"
-      >
-        Save profile name
-      </button>
+    <div className="space-y-1.5 border-t border-[var(--color-accent)]/10 pt-2">
+      <p className="text-xs font-medium text-fg">Profile name</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          maxLength={32}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Display name"
+          className="min-w-0 flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+        />
+        <button
+          type="button"
+          disabled={busy || !name.trim()}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await saveDisplayName(name);
+              toast.success('Profile name saved');
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'Could not save');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="shrink-0 rounded-full bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-50"
+        >
+          Save
+        </button>
+      </div>
     </div>
   );
 }

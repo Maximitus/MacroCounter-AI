@@ -25,14 +25,11 @@ export function MacroSocialSection() {
   }
 
   return (
-    <div className="space-y-4 border-t border-[var(--color-accent)]/10 pt-4">
-      <div>
-        <p className="text-sm font-medium text-fg">Friends</p>
-        <p className="mt-1 text-xs text-[#9ca3af]">
-          Friends see your calorie streak (days above or below your daily goal). Cheat-day
-          allowances in settings do not affect this.
-        </p>
-      </div>
+    <div className="space-y-2.5 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-surface)]/40 px-3 py-2.5">
+      <p className="text-sm font-medium text-fg">Friends</p>
+      <p className="text-[11px] leading-snug text-[#9ca3af]">
+        Friends see your calorie streak (above/below daily goal).
+      </p>
 
       {profile?.friendCode ? (
         <p className="text-xs text-[#9ca3af]">
@@ -61,9 +58,9 @@ export function MacroSocialSection() {
         <input
           type="text"
           value={friendCode}
-          onChange={(e) => setFriendCode(e.target.value)}
+          onChange={(e) => setFriendCode(e.target.value.toUpperCase())}
           placeholder="Friend code"
-          className="min-w-0 flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+          className="min-w-0 flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 font-mono text-sm tracking-wider text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
         />
         <button
           type="button"
@@ -79,7 +76,7 @@ export function MacroSocialSection() {
               setBusy(false);
             }
           }}
-          className="shrink-0 rounded-full bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50"
+          className="shrink-0 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-95 disabled:opacity-50"
         >
           Add
         </button>

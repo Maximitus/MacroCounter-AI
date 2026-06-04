@@ -11,6 +11,25 @@ import {cloudflare} from '@cloudflare/vite-plugin';
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const CHAT_PATH = '/macrocounter/api/chat';
 
+const FIREBASE_ENV_KEYS = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+] as const;
+
+function firebaseEnvDefine(mode: string): Record<string, string> {
+  const env = loadEnv(mode, rootDir, 'VITE_');
+  const out: Record<string, string> = {};
+  for (const key of FIREBASE_ENV_KEYS) {
+    const value = env[key]?.trim();
+    if (value) out[`import.meta.env.${key}`] = JSON.stringify(value);
+  }
+  return out;
+}
+
 /** Read GEMINI_API_KEY from `.dev.vars` (wrangler format). Handles UTF-16 LE (some Windows editors). */
 function readGeminiKeyFromDevVarsFile(filePath: string): string | undefined {
   if (!fs.existsSync(filePath)) return undefined;
@@ -167,8 +186,10 @@ function geminiChatDevMiddlewarePlugin(): Plugin {
   };
 }
 
-export default defineConfig(({command}) => ({
+export default defineConfig(({command, mode}) => ({
   base: '/macrocounter/',
+  envDir: rootDir,
+  define: firebaseEnvDefine(mode),
   plugins: [
     geminiChatDevMiddlewarePlugin(),
     react(),

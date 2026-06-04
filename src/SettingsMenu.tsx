@@ -51,14 +51,14 @@ export function SettingsMenu() {
           }}
         >
           <div
-            className={`relative w-full max-w-md rounded-[1.25rem] border p-6 shadow-lg accent-glow ${
+            className={`relative flex max-h-[min(92dvh,40rem)] w-full max-w-md flex-col rounded-[1.25rem] border p-4 shadow-lg accent-glow sm:p-5 ${
               theme === 'dark'
                 ? 'border-[var(--color-accent)]/20 bg-[#2c3338]'
                 : 'glass border-[var(--color-accent)]/15'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-6 flex items-center justify-between gap-4">
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-accent)]/10 pb-3">
               <h2 id="settings-title" className="text-lg font-semibold text-fg brand-font">
                 Settings
               </h2>
@@ -71,13 +71,16 @@ export function SettingsMenu() {
               </Link>
             </div>
 
-            <div className="space-y-6">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain pr-0.5">
+              <AccountSection />
+              <MacroSocialSection />
+
               <div>
-                <div className="flex rounded-full bg-[var(--color-surface)] p-1.5">
+                <div className="flex rounded-full bg-[var(--color-surface)] p-1">
                   <button
                     type="button"
                     onClick={() => setTheme('dark')}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition ${
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-sm font-medium transition ${
                       theme === 'dark'
                         ? 'bg-[var(--color-accent)] text-white shadow-sm'
                         : 'text-[var(--color-text-light)]'
@@ -89,7 +92,7 @@ export function SettingsMenu() {
                   <button
                     type="button"
                     onClick={() => setTheme('light')}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-medium transition ${
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-sm font-medium transition ${
                       theme === 'light'
                         ? 'bg-[var(--color-accent)] text-white shadow-sm'
                         : 'text-[var(--color-text-light)]'
@@ -102,8 +105,8 @@ export function SettingsMenu() {
               </div>
 
               <div>
-                <p className="mb-3 text-sm text-[#9ca3af]">Accent color</p>
-                <div className="flex flex-wrap justify-center gap-2 sm:justify-between sm:gap-3">
+                <p className="mb-2 text-xs text-[#9ca3af]">Accent color</p>
+                <div className="flex flex-wrap justify-center gap-1.5 sm:justify-between">
                   {ACCENT_PRESETS.map((preset) => {
                     const swatch = theme === 'light' ? preset.lightAccent : preset.darkAccent;
                     const selected = accentId === preset.id;
@@ -112,7 +115,7 @@ export function SettingsMenu() {
                         key={preset.id}
                         type="button"
                         onClick={() => setAccentId(preset.id)}
-                        className={`flex min-w-[4.25rem] flex-col items-center gap-2 rounded-xl px-2.5 py-2 transition ${
+                        className={`flex min-w-[3.5rem] flex-col items-center gap-1 rounded-lg px-1.5 py-1 transition ${
                           selected
                             ? 'border-2 border-[var(--color-accent)]'
                             : 'border-2 border-transparent hover:opacity-95'
@@ -122,23 +125,22 @@ export function SettingsMenu() {
                         aria-pressed={selected}
                       >
                         <span
-                          className="h-11 w-11 shrink-0 rounded-full shadow-inner"
+                          className="h-8 w-8 shrink-0 rounded-full shadow-inner"
                           style={{ backgroundColor: swatch }}
                         />
-                        <span className="text-center text-xs text-[#9ca3af]">{preset.label}</span>
+                        <span className="text-center text-[10px] leading-tight text-[#9ca3af]">
+                          {preset.label}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-
-              <AccountSection />
-              <MacroSocialSection />
             </div>
 
             <button
               type="button"
-              className={`mt-8 w-full rounded-full py-3.5 text-sm font-medium transition ${
+              className={`mt-3 w-full shrink-0 rounded-full py-2.5 text-sm font-medium transition ${
                 theme === 'dark'
                   ? 'bg-[var(--color-surface)] text-white hover:bg-[var(--color-panel-hover)]'
                   : 'bg-[var(--color-surface)] text-fg hover:bg-[var(--color-panel-hover)]'

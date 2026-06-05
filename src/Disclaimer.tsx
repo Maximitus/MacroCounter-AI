@@ -228,7 +228,7 @@ export function DisclaimerFooter() {
             </button>
             .{' '}
             <Link
-              to="/terms"
+              to="/?legal=open"
               className="text-[var(--color-accent)] underline-offset-2 hover:underline"
             >
               Terms of use

@@ -16,6 +16,7 @@ import {
   addFriendByUid,
   ensureUserProfile,
   fetchUserDisplayName,
+  removeFriendByUid,
   resolveFriendCode,
   subscribeFriends,
   subscribeMacroSocial,
@@ -31,6 +32,7 @@ type SocialContextValue = {
   friends: FriendWithStreak[];
   saveDisplayName: (name: string) => Promise<void>;
   addFriendByCode: (code: string) => Promise<void>;
+  removeFriend: (friendUid: string) => Promise<void>;
   inviteUrl: string;
 };
 
@@ -63,6 +65,16 @@ export function SocialProvider({children}: {children: ReactNode}) {
       toast.success(`Added ${friendName}`);
     },
     [user, profile, friends],
+  );
+
+  const removeFriend = useCallback(
+    async (friendUid: string) => {
+      if (!user) throw new Error('Sign in to manage friends');
+      const friend = friends.find((f) => f.uid === friendUid);
+      await removeFriendByUid(user.uid, friendUid);
+      toast.success(friend ? `Removed ${friend.displayName}` : 'Friend removed');
+    },
+    [user, friends],
   );
 
   useEffect(() => {
@@ -176,6 +188,7 @@ export function SocialProvider({children}: {children: ReactNode}) {
       friends: friendsWithStreak,
       saveDisplayName,
       addFriendByCode,
+      removeFriend,
       inviteUrl,
     }),
     [
@@ -185,6 +198,7 @@ export function SocialProvider({children}: {children: ReactNode}) {
       friendsWithStreak,
       saveDisplayName,
       addFriendByCode,
+      removeFriend,
       inviteUrl,
     ],
   );

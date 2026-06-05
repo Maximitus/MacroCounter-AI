@@ -9,6 +9,7 @@ Single reference for toolbox shell, feature UI, legal placement, and PWA assets.
 3. [Disclaimer placement](#3-disclaimer-placement)
 4. [PWA and Android icons](#4-pwa-and-android-icons)
 5. [Reference files](#5-reference-files)
+6. [Settings & Social pages (Workout parity)](#6-settings--social-pages-workout-parity)
 
 ---
 
@@ -33,7 +34,7 @@ Shared header chrome, blueprint grid, glass cards, theme (dark/light), accent pa
 3. **Glass cards:** class **`glass`**; outer glow **`accent-glow`** (not `orange-glow`). Both use **`color-mix`** with **`--color-accent`**.
 4. **Theme:** `html[data-theme="light"]` vs default dark—redefine tokens under `html[data-theme="light"]`, do not fork per-component stylesheets.
 5. **Accent** at runtime on **`document.documentElement`** from presets (§1.5).
-6. **Settings** behind a **raised cog** in the header (§1.6)—not a floating toggle outside chrome.
+6. **Settings** and **Social** open as **modals** from header icons (§6). Legacy `/terms`, `/settings`, `/social` URLs redirect to query params that open the right modal.
 
 ### 1.3 `index.css` (single source of truth)
 
@@ -43,7 +44,6 @@ Copy the **entire** `src/index.css` when bootstrapping. Must include:
 - **`html[data-theme="light"] { ... }`** overrides.
 - **`html[data-theme="light"] .glass`** and **`.blueprint-bg`** overrides.
 - **`body`:** `bg-[var(--color-bg-dark)] text-[var(--color-fg)]`.
-- **`.settings-cog-trigger` / `.settings-cog`** (and light variants).
 - **`.glass`**, **`.accent-glow`**, **`.blueprint-bg`** with **`color-mix(..., var(--color-accent), ...)`**.
 - Scrollbar rules using accent variables.
 
@@ -76,13 +76,18 @@ Do **not** use legacy `orange-glow`, `text-white` on `body`, or hard-coded orang
 
 **First paint:** synchronous inline script in `index.html` `<head>` before CSS/JS—read theme + accent, set `data-theme` and CSS vars. Hex map must match **`ACCENT_PRESETS`** in TypeScript.
 
-### 1.6 Settings UI
+### 1.6 Header chrome icons
 
-**Header:** `flex justify-between` — tool title left, **`SettingsMenu`** right (`px-4 md:px-8`, `py-4`, chrome bar).
+**Header:** title left; right cluster: **Social** (`Users`, `h-5 w-5`) + **Settings** (`Settings`, `h-5 w-5`). Both use the same round hit target:
 
-**Raised cog:** round `h-11 w-11`; Lucide **`Settings`**, class **`settings-cog`** (`h-7 w-7` / `sm:h-8 sm:w-8`, `strokeWidth` ~1.85); parent **`settings-cog-trigger`**. Dimensional shadows in CSS; hover → accent color.
+```tsx
+const chromeIconClass =
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg';
+```
 
-**Modal:** backdrop `z-[70]`; Theme + Accent sections; **Legal** link in header (see §3); Done / backdrop / Escape; body scroll lock.
+**Settings** is a header button that opens `SettingsModal` (`SettingsMenu.tsx` → `onOpen`).
+
+**Social** is a header button that opens `SocialModal` on the main diary screen.
 
 ### 1.7 Page structure
 
@@ -134,9 +139,9 @@ Do **not** use legacy `orange-glow`, `text-white` on `body`, or hard-coded orang
 | Muted | `text-[var(--color-text-light)]` |
 | Primary buttons | `bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]` |
 
-### 1.9 Secondary header (terms)
+### 1.9 Modal overlays
 
-Back link + title left; **`SettingsMenu`** right. Footer: `border-t border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)]`.
+Settings and Social use centered modal panels (`z-[70]` / `z-[110]`), scroll lock, Escape to close, backdrop dismiss on main panel. See §6.
 
 ### 1.10 Shell checklist
 
@@ -145,6 +150,7 @@ Back link + title left; **`SettingsMenu`** right. Footer: `border-t border-[var(
 - [ ] `index.html` first-paint script in sync with `ACCENT_PRESETS`
 - [ ] No hard-coded `#ff8800` or `orange-glow` in components
 - [ ] `text-fg` for body copy; `text-white` only on accent-filled buttons
+- [ ] Settings + Social modals; header icons `h-10 w-10` with `h-5 w-5` glyphs
 
 ---
 
@@ -222,21 +228,21 @@ Legal UX without bottom-chrome overlap on mobile.
 ### 3.1 Product decision
 
 - **No** persistent legal footer on the main screen (fixed bottom meal bar is the "chin").
-- Coverage via: **first-use gate**, **`/terms`**, **Settings → Legal**.
+- Coverage via: **first-use gate**, **Settings → Legal** (in-page dropdown), legacy **`/terms`** redirect.
 
 ### 3.2 Required behavior
 
 **First-use gate:** blocking modal until accept; versioned `localStorage` (`DisclaimerGate`, `DISCLAIMER_VERSION` in `src/Disclaimer.tsx`).
 
-**Shell:** do not mount `DisclaimerFooter` in `main.tsx`. Routes: `/` → `App`, `/terms` → `TermsPage`.
+**Shell:** do not mount `DisclaimerFooter` in `main.tsx`. Main route `/` → diary (`App`). `/terms` → `/?legal=open`, `/settings` → `/?open=settings`, `/social` → `/?open=social` (legacy bookmarks).
 
-**Settings:** right-aligned **Legal** text link in settings modal header → `/terms`; close modal on navigate.
+**Settings legal:** expandable **Terms of use** inside the Settings modal. `TermsOfUseContent.tsx` holds the copy; `?legal=open` opens Settings with the dropdown expanded.
 
 ### 3.3 Placement rules
 
 1. Never attach persistent legal text to fixed bottom action bars.
-2. No duplicate legal footers when `/terms` exists.
-3. Full legal copy on `/terms`, not compressed into chrome.
+2. No duplicate legal footers.
+3. Full legal copy in Settings legal dropdown (`TermsOfUseContent`); scrollable panel `max-h-[min(55vh,22rem)]`.
 
 ### 3.4 Accessibility
 
@@ -248,15 +254,16 @@ Keyboard-focusable legal links; safe-area-aware overlays (`env(safe-area-inset-*
 
 - [ ] Gate shows until acceptance; acceptance persisted
 - [ ] No disclaimer footer on main screen
-- [ ] Settings → Legal → `/terms`
+- [ ] Settings → Legal expands terms in-page
+- [ ] `/terms` redirects to `/settings?legal=open`
 - [ ] Mobile: legal UI not hidden behind bottom chin
 
 **QA:**
 
-- [ ] Legal reachable in ≤2 taps from home
-- [ ] `/terms` works by URL and in-app link
+- [ ] Legal reachable in ≤2 taps from home (Settings → Terms of use)
+- [ ] Disclaimer gate link opens Settings legal
 
-**Migrating to another app:** remove global disclaimer footers; add gate + settings Legal link + `/terms`; app-specific acknowledgement keys; bump version on material changes.
+**Migrating to another app:** remove global disclaimer footers; add gate + Settings legal dropdown + `/terms` redirect; app-specific acknowledgement keys; bump version on material changes.
 
 ---
 
@@ -335,15 +342,60 @@ Confirm `manifest.webmanifest` and PNGs under build output; production manifest 
 
 | File | Purpose |
 |------|---------|
-| `src/index.css` | Tokens, light theme, glass, blueprint, settings cog |
+| `src/index.css` | Tokens, light theme, glass, blueprint |
 | `src/theme.tsx` | `ACCENT_PRESETS`, `ThemeProvider` |
-| `src/SettingsMenu.tsx` | Cog + theme/accent/legal modal |
-| `src/App.tsx` | Shell, calendar, meal UI |
+| `src/SettingsMenu.tsx` | Header link to `/settings` |
+| `src/SettingsModal.tsx` | Account, theme, accent, legal modal |
+| `src/TermsOfUseContent.tsx` | Legal copy for Settings dropdown |
+| `src/social/SocialModal.tsx` | Friends, codes, profile name modal |
+| `src/social/FriendsList.tsx` | Friend rows + remove |
+| `src/social/ProfileNameField.tsx` | Shared display name (Social only) |
+| `src/App.tsx` | Diary shell, calendar, meal UI |
 | `src/Disclaimer.tsx` | Gate + modal |
-| `src/TermsPage.tsx` | Full legal page |
 | `index.html` | First-paint theme/accent; manifest + apple-touch-icon |
 | `public/manifest.webmanifest` | Scoped PWA manifest |
 | `public/icons/*` | SVG masters + generated PNGs |
 | `scripts/generatePwaIcons.mjs` | Icon rasterization |
 
 When the app changes, update this document and the relevant section checklists.
+
+---
+
+## 6. Settings & Social modals (Workout parity)
+
+Macro Counter mirrors **Workout Tracker AI** shell patterns (June 2026). Settings and Social are **modals** opened from header icons; the diary stays visible underneath.
+
+### 6.1 Deep links
+
+| URL | Behavior |
+|-----|----------|
+| `/?legal=open` | Open Settings modal, expand Terms |
+| `/?open=settings` | Open Settings modal |
+| `/?open=social` | Open Social modal |
+| `/terms`, `/settings`, `/social` | Redirect to the query forms above (`main.tsx`) |
+
+### 6.2 Settings modal
+
+- Centered panel `max-w-md`, `max-h-[min(92dvh,40rem)]`, scrollable body, **Done** + backdrop close.
+- **Account:** `AccountSection` only — **no profile name** (see Social).
+- **App:** compact inline dark/light toggle; accent swatches left-aligned.
+- **Legal:** chevron dropdown with scrollable `TermsOfUseContent`.
+
+### 6.3 Social modal
+
+- **Profile name** at top (`ProfileNameField`) — shared with Workout via Firestore `users/{uid}/profile/main`.
+- **Add friend** / **Your code** — two-column button grid.
+- **Add friend flow:** manual code first; optional camera scan (iOS-safe).
+- **Friends:** `FriendsList` with streak rows + remove.
+- Sub-panels (your code, add friend) use in-modal back navigation.
+
+### 6.4 Workout-only: AI Coach modal
+
+Workout Tracker opens **Coach** the same way (`AiChatScreen` with `layout="modal"`). Macro Counter has no coach header button.
+
+### 6.5 Parity checklist
+
+- [ ] Header Social + Settings icons same size (`h-10 w-10`, icon `h-5 w-5`)
+- [ ] Profile name only on Social, not Settings
+- [ ] `/terms` opens Settings legal via `/?legal=open`
+- [ ] Friend remove works (`removeFriend` in `SocialContext`)

@@ -5,11 +5,26 @@ import toast from 'react-hot-toast';
 import {parseFriendCodeFromScan} from './friendCode.ts';
 
 type FriendQrScannerProps = {
-  active: boolean;
   onCode: (code: string) => void;
 };
 
-export function FriendQrScanner({active, onCode}: FriendQrScannerProps) {
+async function stopScanner(scanner: Html5Qrcode): Promise<void> {
+  try {
+    if (scanner.isScanning) {
+      await scanner.stop();
+    }
+  } catch {
+    /* already stopped */
+  }
+  try {
+    scanner.clear();
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Mount only while the scan panel is open; starts camera on mount and stops on unmount. */
+export function FriendQrScanner({onCode}: FriendQrScannerProps) {
   const regionId = useId().replace(/:/g, '');
   const onCodeRef = useRef(onCode);
   onCodeRef.current = onCode;
@@ -17,21 +32,9 @@ export function FriendQrScanner({active, onCode}: FriendQrScannerProps) {
   const handledRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
+  const [starting, setStarting] = useState(true);
 
   useEffect(() => {
-    if (!active) {
-      handledRef.current = false;
-      setCameraError(null);
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (scanner) {
-        void scanner.stop().catch(() => {});
-        scanner.clear();
-      }
-      return;
-    }
-
     handledRef.current = false;
     let cancelled = false;
     setStarting(true);
@@ -45,13 +48,14 @@ export function FriendQrScanner({active, onCode}: FriendQrScannerProps) {
         {facingMode: 'environment'},
         {fps: 10, qrbox: {width: 220, height: 220}, aspectRatio: 1},
         (decoded) => {
-          if (handledRef.current) return;
+          if (handledRef.current || cancelled) return;
           const code = parseFriendCodeFromScan(decoded);
           if (!code) return;
           handledRef.current = true;
-          void scanner.stop().then(() => scanner.clear()).catch(() => {});
-          scannerRef.current = null;
-          onCodeRef.current(code);
+          void stopScanner(scanner).then(() => {
+            scannerRef.current = null;
+            onCodeRef.current(code);
+          });
         },
         () => {},
       )
@@ -66,16 +70,19 @@ export function FriendQrScanner({active, onCode}: FriendQrScannerProps) {
 
     return () => {
       cancelled = true;
-      if (scannerRef.current === scanner) {
-        scannerRef.current = null;
-        void scanner.stop().catch(() => {});
-        scanner.clear();
-      }
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      if (s) void stopScanner(s);
     };
-  }, [active, regionId]);
+  }, [regionId]);
 
   async function handlePhotoFile(file: File) {
     const fileRegionId = `${regionId}-file`;
+    const s = scannerRef.current;
+    if (s) {
+      await stopScanner(s);
+      scannerRef.current = null;
+    }
     try {
       const fileScanner = new Html5Qrcode(fileRegionId, {verbose: false});
       const result = await fileScanner.scanFile(file, false);
@@ -92,8 +99,6 @@ export function FriendQrScanner({active, onCode}: FriendQrScannerProps) {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
-
-  if (!active) return null;
 
   return (
     <div className="space-y-3">

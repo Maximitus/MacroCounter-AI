@@ -1,8 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import {BrowserRouter, Route, Routes} from 'react-router-dom';
+import {BrowserRouter, Navigate, Route, Routes} from 'react-router-dom';
 import App from './App.tsx';
-import TermsPage from './TermsPage.tsx';
 import {AuthProvider} from './auth/AuthContext.tsx';
 import {DisclaimerGate} from './Disclaimer.tsx';
 import {SocialProvider} from './social/SocialContext.tsx';
@@ -19,8 +18,10 @@ createRoot(document.getElementById('root')!).render(
           <SocialProvider>
             <DisclaimerGate>
               <Routes>
-                <Route path="/" element={<App />} />
-                <Route path="/terms" element={<TermsPage />} />
+                <Route path="/terms" element={<Navigate to="/?legal=open" replace />} />
+                <Route path="/settings" element={<Navigate to="/?open=settings" replace />} />
+                <Route path="/social" element={<Navigate to="/?open=social" replace />} />
+                <Route path="/*" element={<App />} />
               </Routes>
             </DisclaimerGate>
           </SocialProvider>

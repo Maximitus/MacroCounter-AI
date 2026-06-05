@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -116,6 +117,10 @@ export async function addFriendByUid(
     displayName: friendDisplayName,
     addedAt: serverTimestamp(),
   });
+}
+
+export async function removeFriendByUid(myUid: string, friendUid: string): Promise<void> {
+  await deleteDoc(friendRef(myUid, friendUid));
 }
 
 export function subscribeFriends(

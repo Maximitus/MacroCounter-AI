@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
+import {useLocation, useNavigate} from 'react-router-dom';
 import {
   Camera,
   ClipboardList,
@@ -47,6 +48,7 @@ import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import {SettingsModal} from './SettingsModal.tsx';
 import {SettingsMenu} from './SettingsMenu.tsx';
 import {SocialModal} from './social/SocialModal.tsx';
 import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
@@ -685,7 +687,12 @@ function getPeriodGoals(dailyGoals: MacroTotals, view: TotalsView): MacroTotals 
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const {user, loading: authLoading} = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTermsOpen, setSettingsTermsOpen] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
 
   const [macros, setMacros] = useState(() => {
     const saved = localStorage.getItem('macros');
@@ -697,7 +704,6 @@ export default function App() {
   });
   const [totalsView, setTotalsView] = useState<TotalsView>('daily');
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [socialOpen, setSocialOpen] = useState(false);
   const [dailyLog, setDailyLog] = useState<Record<string, MacroTotals>>(() => {
     const saved = localStorage.getItem('dailyLog');
     return saved ? JSON.parse(saved) : {};
@@ -812,6 +818,31 @@ export default function App() {
   });
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    let changed = false;
+    if (params.get('legal') === 'open') {
+      setSettingsOpen(true);
+      setSettingsTermsOpen(true);
+      params.delete('legal');
+      changed = true;
+    }
+    if (params.get('open') === 'settings') {
+      setSettingsOpen(true);
+      params.delete('open');
+      changed = true;
+    }
+    if (params.get('open') === 'social') {
+      setSocialOpen(true);
+      params.delete('open');
+      changed = true;
+    }
+    if (changed) {
+      const next = params.toString();
+      navigate({pathname: '/', search: next ? `?${next}` : ''}, {replace: true});
+    }
+  }, [location.search, navigate]);
 
   useEffect(() => {
     const lastDate = lastUpdatedDate;
@@ -1237,7 +1268,7 @@ export default function App() {
           >
             <Users className="h-5 w-5" aria-hidden />
           </button>
-          <SettingsMenu />
+          <SettingsMenu onOpen={() => setSettingsOpen(true)} />
         </div>
       </header>
 
@@ -2326,6 +2357,14 @@ export default function App() {
         </div>
       )}
 
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsTermsOpen(false);
+        }}
+        initialTermsOpen={settingsTermsOpen}
+      />
       <SocialModal open={socialOpen} onClose={() => setSocialOpen(false)} />
     </div>
     </MacroCloudSyncProvider>

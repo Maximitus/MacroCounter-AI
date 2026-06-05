@@ -24,7 +24,7 @@ export function ProfileNameField() {
   }
 
   return (
-    <div className="space-y-1.5 border-t border-[var(--color-accent)]/10 pt-2">
+    <div className="space-y-1.5">
       <p className="text-xs font-medium text-fg">Profile name</p>
       <div className="flex gap-2">
         <input

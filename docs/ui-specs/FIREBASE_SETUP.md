@@ -20,7 +20,22 @@ Same Firebase project as **Workout Tracker** (`maxmvs-toolbox`). Only `VITE_FIRE
 
 ## Step 9 — Production
 
-Same as Workout Path A:
+### Git push (Cloudflare Workers Builds)
+
+Same token as Workout (`Workers Builds Configuration` → Edit). Uses **Macro** `.env.local` (especially `VITE_FIREBASE_APP_ID`).
+
+```powershell
+cd MacroCounter-AI
+npx wrangler login
+$env:CLOUDFLARE_API_TOKEN = "your-token"
+npm run cf:push-build-env
+```
+
+Then Cloudflare → **macrocounter-ai** → **Deployments** → **Retry deployment**.
+
+If the script says “No build triggers”, connect the Macro Git repo under **macrocounter-ai** → Settings → Build.
+
+### PC deploy only
 
 ```bash
 npx wrangler login

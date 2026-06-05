@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "icons": "node scripts/generatePwaIcons.mjs",
-    "deploy": "npm run build && node scripts/stripDevVarsFromDist.mjs && wrangler deploy --config dist/macrocounter_ai/wrangler.json"
+    "deploy": "npm run build && node scripts/stripDevVarsFromDist.mjs && wrangler deploy --config dist/macrocounter_ai/wrangler.json",
+    "cf:push-build-env": "node scripts/pushCloudflareBuildEnv.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

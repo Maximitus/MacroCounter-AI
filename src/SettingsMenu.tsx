@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Moon, Settings, Sun } from 'lucide-react';
 import {AccountSection} from './auth/AccountSection.tsx';
-import {MacroSocialSection} from './social/MacroSocialSection.tsx';
 import {ACCENT_PRESETS, useTheme} from './theme.tsx';
 
 export function SettingsMenu() {
@@ -73,7 +72,6 @@ export function SettingsMenu() {
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain pr-0.5">
               <AccountSection />
-              <MacroSocialSection />
 
               <div>
                 <div className="flex rounded-full bg-[var(--color-surface)] p-1">

@@ -21,6 +21,7 @@ import {
   Scale,
   Plus,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -47,6 +48,7 @@ import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
 import {SettingsMenu} from './SettingsMenu.tsx';
+import {SocialModal} from './social/SocialModal.tsx';
 import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
 import {
   ceilToOneDecimal,
@@ -695,6 +697,7 @@ export default function App() {
   });
   const [totalsView, setTotalsView] = useState<TotalsView>('daily');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
   const [dailyLog, setDailyLog] = useState<Record<string, MacroTotals>>(() => {
     const saved = localStorage.getItem('dailyLog');
     return saved ? JSON.parse(saved) : {};
@@ -1225,7 +1228,17 @@ export default function App() {
         <h1 className="min-w-0 flex-1 text-2xl font-semibold leading-tight tracking-tight text-[var(--color-accent)] brand-font">
           Macro Counter
         </h1>
-        <SettingsMenu />
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSocialOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+            aria-label="Open Social"
+          >
+            <Users className="h-5 w-5" aria-hidden />
+          </button>
+          <SettingsMenu />
+        </div>
       </header>
 
       <main className="grid gap-6 px-4 pt-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:px-8 md:pt-5">
@@ -2312,6 +2325,8 @@ export default function App() {
           </footer>
         </div>
       )}
+
+      <SocialModal open={socialOpen} onClose={() => setSocialOpen(false)} />
     </div>
     </MacroCloudSyncProvider>
   );

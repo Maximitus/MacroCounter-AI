@@ -2,7 +2,6 @@ import {useState} from 'react';
 import toast from 'react-hot-toast';
 import {useAuth} from './AuthContext.tsx';
 import {useMacroCloudSyncStatus} from '../macroData/MacroCloudSyncContext.tsx';
-import {ProfileNameField} from '../social/ProfileNameField.tsx';
 
 function authErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -158,9 +157,8 @@ export function AccountSection() {
           Sign out
         </button>
         <p className="text-[11px] leading-snug text-[#9ca3af]">
-          Signs out of Macro and Workout on this device.
+          Signs out of Macro and Workout on this device. Edit your display name in Social.
         </p>
-        <ProfileNameField />
       </div>
     );
   }

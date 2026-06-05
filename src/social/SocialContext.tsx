@@ -134,6 +134,21 @@ export function SocialProvider({children}: {children: ReactNode}) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!enabled || authLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('friend');
+    if (!code) return;
+    const normalized = normalizeFriendCode(code);
+    params.delete('friend');
+    const nextUrl =
+      window.location.pathname + (params.toString() ? `?${params}` : '') + window.location.hash;
+    window.history.replaceState({}, '', nextUrl);
+    void addFriendByCode(normalized).catch((e) => {
+      toast.error(e instanceof Error ? e.message : 'Could not add friend');
+    });
+  }, [enabled, authLoading, addFriendByCode]);
+
   const saveDisplayName = useCallback(
     async (name: string) => {
       if (!user) throw new Error('Sign in first');

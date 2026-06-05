@@ -20,3 +20,23 @@ export function friendInviteUrl(code: string): string {
   const path = base ? `${base}/` : '/';
   return `${origin}${path}?friend=${encodeURIComponent(normalizeFriendCode(code))}`;
 }
+
+/** Parse invite URL or raw code from a QR scan / pasted link. */
+export function parseFriendCodeFromScan(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    const fromQuery = url.searchParams.get('friend');
+    if (fromQuery) {
+      const normalized = normalizeFriendCode(fromQuery);
+      if (normalized.length >= 6) return normalized;
+    }
+  } catch {
+    /* plain code or partial URL */
+  }
+
+  const normalized = normalizeFriendCode(trimmed);
+  return normalized.length >= 6 ? normalized : null;
+}

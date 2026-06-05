@@ -8,10 +8,14 @@ export function SettingsModal({
   open,
   onClose,
   initialTermsOpen = false,
+  showWeightSection,
+  onShowWeightSectionChange,
 }: {
   open: boolean;
   onClose: () => void;
   initialTermsOpen?: boolean;
+  showWeightSection: boolean;
+  onShowWeightSectionChange: (v: boolean) => void;
 }) {
   const {theme, setTheme, accentId, setAccentId} = useTheme();
   const [termsOpen, setTermsOpen] = useState(false);
@@ -133,14 +137,41 @@ export function SettingsModal({
                   })}
                 </div>
               </div>
+
+              <div className="rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-surface)] px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-fg">Show weight section</p>
+                    <p className="text-xs text-[var(--color-text-light)]">
+                      Display the weight chart and log on the home screen
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showWeightSection}
+                    aria-label="Show weight section on home screen"
+                    onClick={() => onShowWeightSectionChange(!showWeightSection)}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                      showWeightSection
+                        ? 'bg-[var(--color-accent)]'
+                        : 'bg-[var(--color-text-light)]/25'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                        showWeightSection ? 'left-[calc(100%-1.625rem)]' : 'left-0.5'
+                      }`}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           <div>
             <h3 className="mb-2 text-sm font-semibold text-fg">Legal</h3>
-            <p className="mb-3 text-xs text-[var(--color-text-light)]">
-              Terms of use and disclaimers for this app.
-            </p>
             <button
               type="button"
               className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2.5 text-left text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"

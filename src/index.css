@@ -47,10 +47,6 @@ html[data-theme="light"] .blueprint-bg {
     linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 8%, transparent) 1px, transparent 1px);
 }
 
-html[data-theme="light"] * {
-  scrollbar-color: var(--color-accent) var(--color-surface-deep);
-}
-
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -87,32 +83,19 @@ h3,
 }
 
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-accent) var(--color-surface-deep);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--color-surface-deep);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-accent);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent-hover);
+*::-webkit-scrollbar {
+  display: none;
 }
 
 .scrollbar-hidden {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }

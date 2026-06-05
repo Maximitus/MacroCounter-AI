@@ -8,7 +8,7 @@ export function FriendsList() {
   if (friends.length === 0) {
     return (
       <p className="text-sm text-[var(--color-text-light)]">
-        No friends yet. Add someone from Workout or Macro with a friend code.
+        No friends yet. Scan or enter a code to add someone.
       </p>
     );
   }

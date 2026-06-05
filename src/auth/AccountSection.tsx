@@ -106,7 +106,7 @@ export function AccountSection() {
           >
             Link Google
           </button>
-          <details className="rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface)]/50">
+          <details className="group rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface)]/50">
             <summary className="cursor-pointer list-none px-2.5 py-2 text-xs font-medium text-fg marker:content-none [&::-webkit-details-marker]:hidden">
               Link email
             </summary>
@@ -156,9 +156,6 @@ export function AccountSection() {
         <button type="button" disabled={busy} onClick={() => run(signOut, 'Signed out')} className={btnSecondary}>
           Sign out
         </button>
-        <p className="text-[11px] leading-snug text-[#9ca3af]">
-          Signs out of Macro and Workout on this device. Edit your display name in Social.
-        </p>
       </div>
     );
   }

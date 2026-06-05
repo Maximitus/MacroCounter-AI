@@ -50,7 +50,13 @@ export function SocialProvider({children}: {children: ReactNode}) {
 
   const addFriendByCode = useCallback(
     async (code: string) => {
-      if (!user || !profile) throw new Error('Sign in to add friends');
+      if (!user) throw new Error('Sign in to add friends');
+      const myProfile = profile ?? (await ensureUserProfile(user.uid, user.email));
+      const myName =
+        myProfile.displayName?.trim() ||
+        user.email?.split('@')[0]?.trim().slice(0, 24) ||
+        'Friend';
+
       const friendUid = await resolveFriendCode(code);
       if (!friendUid) throw new Error('Friend code not found');
       if (friendUid === user.uid) throw new Error('That is your own code');
@@ -61,7 +67,7 @@ export function SocialProvider({children}: {children: ReactNode}) {
 
       const friendName = await fetchUserDisplayName(friendUid);
       await addFriendByUid(user.uid, friendUid, friendName);
-      await addFriendByUid(friendUid, user.uid, profile.displayName);
+      await addFriendByUid(friendUid, user.uid, myName);
       toast.success(`Added ${friendName}`);
     },
     [user, profile, friends],

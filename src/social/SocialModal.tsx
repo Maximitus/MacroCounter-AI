@@ -8,7 +8,17 @@ import {FriendsList} from './FriendsList.tsx';
 import {ProfileNameField} from './ProfileNameField.tsx';
 import {useSocial} from './SocialContext.tsx';
 
-export function SocialModal({open, onClose}: {open: boolean; onClose: () => void}) {
+export function SocialModal({
+  open,
+  onClose,
+  showSocialOnOverview,
+  onShowSocialOnOverviewChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  showSocialOnOverview: boolean;
+  onShowSocialOnOverviewChange: (v: boolean) => void;
+}) {
   const {theme} = useTheme();
   const {enabled, profile, inviteUrl, addFriendByCode} = useSocial();
   const [panel, setPanel] = useState<'main' | 'show-code' | 'scan-code'>('main');
@@ -72,7 +82,7 @@ export function SocialModal({open, onClose}: {open: boolean; onClose: () => void
       return (
         <div className="space-y-4">
           <p className="text-center text-sm text-[var(--color-text-light)]">
-            Friends scan or open this link to add you. Works across Workout and Macro.
+            Friends scan or open this link to add you.
           </p>
           {qrDataUrl ? (
             <img
@@ -172,10 +182,6 @@ export function SocialModal({open, onClose}: {open: boolean; onClose: () => void
       <div className="space-y-5">
         <ProfileNameField />
 
-        <p className="text-xs text-[var(--color-text-light)]">
-          Friends see your calorie streak (above/below daily goal).
-        </p>
-
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -196,6 +202,38 @@ export function SocialModal({open, onClose}: {open: boolean; onClose: () => void
             <QrCode className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
             Your code
           </button>
+        </div>
+
+        <div className="space-y-2">
+          <div className="rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-surface)] px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg">Show on home</p>
+                <p className="text-xs text-[var(--color-text-light)]">
+                  Display friends and calorie streaks on the main screen
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showSocialOnOverview}
+                aria-label="Show friends section on home screen"
+                onClick={() => onShowSocialOnOverviewChange(!showSocialOnOverview)}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                  showSocialOnOverview
+                    ? 'bg-[var(--color-accent)]'
+                    : 'bg-[var(--color-text-light)]/25'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                    showSocialOnOverview ? 'left-[calc(100%-1.625rem)]' : 'left-0.5'
+                  }`}
+                  aria-hidden
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div>

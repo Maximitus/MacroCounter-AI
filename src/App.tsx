@@ -48,9 +48,12 @@ import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import {MacroSyncConflictModal} from './macroData/MacroSyncConflictModal.tsx';
 import {SettingsModal} from './SettingsModal.tsx';
 import {SettingsMenu} from './SettingsMenu.tsx';
+import {LabeledActionButton} from './DropdownActionButton.tsx';
 import {SocialModal} from './social/SocialModal.tsx';
+import {SocialOverviewSection} from './social/SocialOverviewSection.tsx';
 import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
 import {
   ceilToOneDecimal,
@@ -686,6 +689,45 @@ function getPeriodGoals(dailyGoals: MacroTotals, view: TotalsView): MacroTotals 
   };
 }
 
+const STORAGE_SOCIAL_ON_OVERVIEW = 'macrocounter_social_on_overview_v1';
+const STORAGE_SHOW_WEIGHT = 'macrocounter_show_weight_v1';
+
+function loadShowSocialOnOverview(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_SOCIAL_ON_OVERVIEW);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function saveShowSocialOnOverview(show: boolean) {
+  try {
+    localStorage.setItem(STORAGE_SOCIAL_ON_OVERVIEW, String(show));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadShowWeightSection(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_SHOW_WEIGHT);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function saveShowWeightSection(show: boolean) {
+  try {
+    localStorage.setItem(STORAGE_SHOW_WEIGHT, String(show));
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -693,6 +735,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTermsOpen, setSettingsTermsOpen] = useState(false);
   const [socialOpen, setSocialOpen] = useState(false);
+  const [showSocialOnOverview, setShowSocialOnOverview] = useState(loadShowSocialOnOverview);
+  const [showWeightSection, setShowWeightSection] = useState(loadShowWeightSection);
 
   const [macros, setMacros] = useState(() => {
     const saved = localStorage.getItem('macros');
@@ -796,7 +840,13 @@ export default function App() {
     return localStorage.getItem('lastUpdatedDate') ?? new Date().toDateString();
   });
 
-  const {cloudEnabled, syncing: cloudSyncing} = useMacroCloudSync({
+  const {
+    cloudEnabled,
+    syncing: cloudSyncing,
+    syncConflict,
+    resolvingConflict,
+    resolveSyncConflict,
+  } = useMacroCloudSync({
     user,
     authLoading,
     macros,
@@ -864,28 +914,43 @@ export default function App() {
       setMacros({ calories: 0, protein: 0, carbs: 0, fat: 0 });
       setHistory([]);
       setLastUpdatedDate(today);
-      if (!cloudEnabled) localStorage.setItem('lastUpdatedDate', today);
+      localStorage.setItem('lastUpdatedDate', today);
     }
-  }, [lastUpdatedDate, cloudEnabled]);
+  }, [lastUpdatedDate]);
 
   useEffect(() => {
-    if (cloudEnabled) return;
     localStorage.setItem('macros', JSON.stringify(macros));
     localStorage.setItem('history', JSON.stringify(history));
     localStorage.setItem('goals', JSON.stringify(goals));
     localStorage.setItem('favorites', JSON.stringify(favorites));
     localStorage.setItem('dailyLog', JSON.stringify(dailyLog));
-  }, [macros, history, goals, favorites, dailyLog, cloudEnabled]);
+  }, [macros, history, goals, favorites, dailyLog]);
 
   useEffect(() => {
-    if (cloudEnabled) return;
     localStorage.setItem('weightLog', JSON.stringify(weightLog));
     localStorage.setItem('weightGoal', JSON.stringify(weightGoal));
-  }, [weightLog, weightGoal, cloudEnabled]);
+  }, [weightLog, weightGoal]);
+
+  useEffect(() => {
+    if (!syncConflict) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [syncConflict]);
 
   useEffect(() => {
     if (isGoalsModalOpen) setWeightGoalFieldDraft(null);
   }, [isGoalsModalOpen]);
+
+  useEffect(() => {
+    saveShowSocialOnOverview(showSocialOnOverview);
+  }, [showSocialOnOverview]);
+
+  useEffect(() => {
+    saveShowWeightSection(showWeightSection);
+  }, [showWeightSection]);
 
   useEffect(() => {
     if (
@@ -1236,6 +1301,13 @@ export default function App() {
     <MacroCloudSyncProvider value={{cloudEnabled, syncing: cloudSyncing}}>
     <div className="min-h-screen bg-[var(--color-bg-dark)] text-fg font-sans blueprint-bg">
       <Toaster />
+      {syncConflict ? (
+        <MacroSyncConflictModal
+          conflict={syncConflict}
+          resolving={resolvingConflict}
+          onChoose={resolveSyncConflict}
+        />
+      ) : null}
       <input
         id="meal-photo-camera"
         name="meal_photo_camera"
@@ -1286,7 +1358,7 @@ export default function App() {
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+                className="rounded-lg p-1.5 text-fg transition hover:bg-[var(--color-surface)]"
                 onClick={() => setCalendarOpen(true)}
                 aria-label="Open monthly calendar"
               >
@@ -1294,7 +1366,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+                className="rounded-lg p-1.5 text-fg transition hover:bg-[var(--color-surface)]"
                 onClick={() => setIsGoalsModalOpen(true)}
                 aria-label="Set daily goals (macros and weight goal)"
               >
@@ -1356,25 +1428,28 @@ export default function App() {
                 </div>
               </div>
             ))}
-            <button
-              type="button"
+            <LabeledActionButton
+              icon={<Plus className="h-4 w-4 shrink-0" aria-hidden />}
+              label="Add meal"
               onClick={() => setAddMealChooserOpen(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-accent)]/40 bg-[var(--color-bg-dark)]/60 p-4 text-sm font-semibold text-[var(--color-accent)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-panel-hover)] hover:text-fg"
-              aria-label="Add a meal"
-            >
-              <Plus className="h-5 w-5" aria-hidden />
-              Add meal
-            </button>
+              className="w-full"
+            />
           </div>
         </section>
 
-        <WeightSection
-          weightLog={weightLog}
-          weightGoal={weightGoal}
-          onLogWeight={(w) => {
-            setWeightLog((prev) => ({ ...prev, [getTodayKey()]: w }));
-          }}
-        />
+        {showSocialOnOverview ? (
+          <SocialOverviewSection onOpenSocial={() => setSocialOpen(true)} />
+        ) : null}
+
+        {showWeightSection ? (
+          <WeightSection
+            weightLog={weightLog}
+            weightGoal={weightGoal}
+            onLogWeight={(w) => {
+              setWeightLog((prev) => ({ ...prev, [getTodayKey()]: w }));
+            }}
+          />
+        ) : null}
       </main>
 
       <footer
@@ -2364,8 +2439,15 @@ export default function App() {
           setSettingsTermsOpen(false);
         }}
         initialTermsOpen={settingsTermsOpen}
+        showWeightSection={showWeightSection}
+        onShowWeightSectionChange={setShowWeightSection}
       />
-      <SocialModal open={socialOpen} onClose={() => setSocialOpen(false)} />
+      <SocialModal
+        open={socialOpen}
+        onClose={() => setSocialOpen(false)}
+        showSocialOnOverview={showSocialOnOverview}
+        onShowSocialOnOverviewChange={setShowSocialOnOverview}
+      />
     </div>
     </MacroCloudSyncProvider>
   );

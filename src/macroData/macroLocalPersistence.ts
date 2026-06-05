@@ -2,8 +2,57 @@ import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
 
 export const STORAGE_BUNDLE_UPDATED_AT = 'macrocounter_bundle_updated_at_v1';
 
+function lastSyncFingerprintKey(uid: string) {
+  return `macrocounter_last_sync_fp_v1_${uid}`;
+}
+
+export function getLastSyncFingerprint(uid: string): string | null {
+  try {
+    return localStorage.getItem(lastSyncFingerprintKey(uid));
+  } catch {
+    return null;
+  }
+}
+
+export function setLastSyncFingerprint(uid: string, fingerprint: string) {
+  try {
+    localStorage.setItem(lastSyncFingerprintKey(uid), fingerprint);
+  } catch {
+    /* ignore quota */
+  }
+}
+
 function ceilToOneDecimal(n: number): number {
   return Math.ceil(n * 10) / 10;
+}
+
+function normalizeWeightLog(weightLog: Record<string, number>): Record<string, number> {
+  const next: Record<string, number> = {};
+  for (const [k, v] of Object.entries(weightLog)) {
+    const num = typeof v === 'number' ? v : parseFloat(String(v));
+    if (Number.isFinite(num) && num > 0) next[k] = ceilToOneDecimal(num);
+  }
+  return next;
+}
+
+/** Strip undefined / Firestore-vs-local JSON noise before compare. */
+export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
+  return JSON.parse(
+    JSON.stringify({
+      schemaVersion: bundle.schemaVersion ?? 1,
+      macros: bundle.macros,
+      goals: bundle.goals,
+      dailyLog: bundle.dailyLog,
+      weightGoal:
+        typeof bundle.weightGoal === 'number' && Number.isFinite(bundle.weightGoal)
+          ? bundle.weightGoal
+          : 0,
+      weightLog: normalizeWeightLog(bundle.weightLog),
+      favorites: bundle.favorites,
+      history: bundle.history,
+      lastUpdatedDate: bundle.lastUpdatedDate ?? '',
+    }),
+  ) as MacroDataBundle;
 }
 
 export function markLocalBundleUpdatedAt(atMs = Date.now()) {
@@ -24,16 +73,18 @@ export function getLocalBundleUpdatedAtMs(): number {
   }
 }
 
+/** Compact fingerprint for comparing local vs remote bundles. */
 export function macroBundleFingerprint(bundle: MacroDataBundle): string {
+  const c = canonicalMacroBundle(bundle);
   return JSON.stringify({
-    macros: bundle.macros,
-    goals: bundle.goals,
-    dailyLog: bundle.dailyLog,
-    weightGoal: bundle.weightGoal,
-    weightLog: bundle.weightLog,
-    favorites: bundle.favorites,
-    history: bundle.history,
-    lastUpdatedDate: bundle.lastUpdatedDate,
+    macros: c.macros,
+    goals: c.goals,
+    dailyLog: c.dailyLog,
+    weightGoal: c.weightGoal,
+    weightLog: c.weightLog,
+    favorites: c.favorites,
+    history: c.history,
+    lastUpdatedDate: c.lastUpdatedDate,
   });
 }
 

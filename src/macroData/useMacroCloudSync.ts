@@ -4,11 +4,14 @@ import type {User} from 'firebase/auth';
 import toast from 'react-hot-toast';
 import {getFirebaseDb, isFirebaseConfigured} from '../firebase.ts';
 import {
+  canonicalMacroBundle,
+  getLastSyncFingerprint,
   getLocalBundleUpdatedAtMs,
   loadLocalMacroBundleRaw,
   macroBundleFingerprint,
   markLocalBundleUpdatedAt,
   saveLocalMacroBundle,
+  setLastSyncFingerprint,
 } from './macroLocalPersistence.ts';
 import type {FavoriteEntry, MacroDataBundle, MacroTotals, MealEntry} from './macroTypes.ts';
 import type {MacroSyncConflictInfo} from './MacroSyncConflictModal.tsx';
@@ -71,9 +74,64 @@ function remoteUpdatedMs(raw: Record<string, unknown> | undefined): number {
   return 0;
 }
 
-function bundlesConflict(local: MacroDataBundle, remote: MacroDataBundle): boolean {
+/**
+ * Prompt only for a real fork — not cache layout drift after a successful sync.
+ */
+function shouldPromptSyncConflict(
+  uid: string,
+  local: MacroDataBundle,
+  remote: MacroDataBundle,
+  localMs: number,
+  remoteMs: number,
+): boolean {
   if (!localHasData(local) || !cloudHasData(remote)) return false;
-  return macroBundleFingerprint(local) !== macroBundleFingerprint(remote);
+
+  const localFp = macroBundleFingerprint(local);
+  const remoteFp = macroBundleFingerprint(remote);
+  if (localFp === remoteFp) return false;
+
+  const lastSyncFp = getLastSyncFingerprint(uid);
+
+  if (lastSyncFp != null && lastSyncFp === remoteFp) return false;
+
+  if (
+    lastSyncFp != null &&
+    lastSyncFp === localFp &&
+    localFp !== remoteFp &&
+    localMs > 0 &&
+    remoteMs > 0 &&
+    remoteMs > localMs + WRITE_SKEW_MS
+  ) {
+    return false;
+  }
+
+  if (
+    lastSyncFp != null &&
+    lastSyncFp === localFp &&
+    localFp !== remoteFp &&
+    localMs > remoteMs + WRITE_SKEW_MS
+  ) {
+    return true;
+  }
+
+  if (lastSyncFp != null && lastSyncFp !== localFp && lastSyncFp !== remoteFp) {
+    return true;
+  }
+
+  if (lastSyncFp == null) {
+    if (localMs <= 0 && remoteMs > 0) return true;
+    if (localMs > 0 && remoteMs > 0 && localMs > remoteMs + WRITE_SKEW_MS) return true;
+    return false;
+  }
+
+  return false;
+}
+
+function remoteToBundle(remote: MacroDataBundle): MacroDataBundle {
+  return canonicalMacroBundle({
+    schemaVersion: SCHEMA_VERSION,
+    ...remote,
+  });
 }
 
 function applyBundleToState(
@@ -225,6 +283,12 @@ export function useMacroCloudSync({
 
   const cloudEnabled = isFirebaseConfigured() && !!user && ready && !syncConflict;
 
+  const recordSyncedBundle = (uid: string, bundle: MacroDataBundle) => {
+    const fp = macroBundleFingerprint(bundle);
+    baselineFingerprintRef.current = fp;
+    setLastSyncFingerprint(uid, fp);
+  };
+
   const resolveSyncConflict = useCallback(async (choice: 'local' | 'remote') => {
     const conflict = syncConflictRef.current;
     const uid = userRef.current?.uid;
@@ -241,7 +305,7 @@ export function useMacroCloudSync({
           conflict.remote,
           conflict.remoteUpdatedMs > 0 ? conflict.remoteUpdatedMs : Date.now(),
         );
-        baselineFingerprintRef.current = macroBundleFingerprint(conflict.remote);
+        recordSyncedBundle(uid, conflict.remote);
         localDirty.current = false;
         toast.success('Using cloud data');
       } else {
@@ -253,7 +317,7 @@ export function useMacroCloudSync({
         lastCommittedWriteMsRef.current = Date.now();
         markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
         applyBundleToState(localBundle, settersRef.current, applyFlags.current);
-        baselineFingerprintRef.current = macroBundleFingerprint(localBundle);
+        recordSyncedBundle(uid, localBundle);
         localDirty.current = false;
         toast.success("Using this device's data");
       }
@@ -287,7 +351,7 @@ export function useMacroCloudSync({
       .then(() => {
         lastCommittedWriteMsRef.current = Date.now();
         markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-        baselineFingerprintRef.current = macroBundleFingerprint(payload);
+        recordSyncedBundle(uid, payload);
         localDirty.current = false;
       })
       .catch((e) => {
@@ -356,7 +420,7 @@ export function useMacroCloudSync({
               await pushBundleToCloud(user.uid, localBundle);
               lastCommittedWriteMsRef.current = Date.now();
               markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-              baselineFingerprintRef.current = macroBundleFingerprint(localBundle);
+              recordSyncedBundle(user.uid, localBundle);
               localDirty.current = false;
               toast.success('Macro data uploaded to your account');
             } catch (e) {
@@ -386,7 +450,7 @@ export function useMacroCloudSync({
             await pushBundleToCloud(user.uid, localBundle);
             lastCommittedWriteMsRef.current = Date.now();
             markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-            baselineFingerprintRef.current = macroBundleFingerprint(localBundle);
+            recordSyncedBundle(user.uid, localBundle);
             localDirty.current = false;
             toast.success('Macro data uploaded to your account');
           } catch (e) {
@@ -408,15 +472,18 @@ export function useMacroCloudSync({
           !snap.metadata.hasPendingWrites &&
           !staleRemote
         ) {
-          const remoteBundle: MacroDataBundle = {
+          const remoteBundle = remoteToBundle({
             schemaVersion: SCHEMA_VERSION,
             ...remote,
-          };
+          });
 
-          if (!conflictResolvedRef.current && bundlesConflict(localBundle, remoteBundle)) {
+          if (
+            !conflictResolvedRef.current &&
+            shouldPromptSyncConflict(user.uid, localBundle, remoteBundle, localUpdatedMs, remoteMs)
+          ) {
             if (!syncConflictRef.current) {
               setSyncConflict({
-                local: localBundle,
+                local: canonicalMacroBundle(localBundle),
                 remote: remoteBundle,
                 localUpdatedMs,
                 remoteUpdatedMs: remoteMs,
@@ -429,7 +496,7 @@ export function useMacroCloudSync({
           if (!conflictResolvedRef.current) {
             applyBundleToState(remoteBundle, settersRef.current, applyFlags.current);
             saveLocalMacroBundle(remoteBundle, remoteMs > 0 ? remoteMs : Date.now());
-            baselineFingerprintRef.current = macroBundleFingerprint(remoteBundle);
+            recordSyncedBundle(user.uid, remoteBundle);
             localDirty.current = false;
           } else {
             const remoteFp = macroBundleFingerprint(remoteBundle);
@@ -443,7 +510,7 @@ export function useMacroCloudSync({
             ) {
               applyBundleToState(remoteBundle, settersRef.current, applyFlags.current);
               saveLocalMacroBundle(remoteBundle, remoteMs > 0 ? remoteMs : Date.now());
-              baselineFingerprintRef.current = remoteFp;
+              recordSyncedBundle(user.uid, remoteBundle);
               localDirty.current = false;
             }
           }
@@ -495,7 +562,7 @@ export function useMacroCloudSync({
         .then(() => {
           lastCommittedWriteMsRef.current = Date.now();
           markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-          baselineFingerprintRef.current = macroBundleFingerprint(payload);
+          recordSyncedBundle(user!.uid, payload);
           localDirty.current = false;
         })
         .catch((e) => {

@@ -1,6 +1,8 @@
+import {normalizeTombstones} from './macroTombstones.ts';
 import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
 
 export const STORAGE_BUNDLE_UPDATED_AT = 'macrocounter_bundle_updated_at_v1';
+export const STORAGE_TOMBSTONES = 'macrocounter_tombstones_v1';
 
 function sortRecordKeys<T>(record: Record<string, T>): Record<string, T> {
   const sorted: Record<string, T> = {};
@@ -42,6 +44,29 @@ export function setLastSyncFingerprint(uid: string, fingerprint: string) {
   }
 }
 
+function lastSyncedBundleKey(uid: string) {
+  return `macrocounter_last_sync_bundle_v1_${uid}`;
+}
+
+export function getLastSyncedBundle(uid: string): MacroDataBundle | null {
+  try {
+    const raw = localStorage.getItem(lastSyncedBundleKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MacroDataBundle;
+    return canonicalMacroBundle(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function setLastSyncedBundle(uid: string, bundle: MacroDataBundle) {
+  try {
+    localStorage.setItem(lastSyncedBundleKey(uid), JSON.stringify(canonicalMacroBundle(bundle)));
+  } catch {
+    /* ignore quota */
+  }
+}
+
 function ceilToOneDecimal(n: number): number {
   return Math.ceil(n * 10) / 10;
 }
@@ -74,6 +99,7 @@ function normalizeDailyLog(dailyLog: Record<string, MacroTotals>): Record<string
 
 /** Strip undefined / Firestore-vs-local JSON noise before compare. */
 export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
+  const tombstones = normalizeTombstones(bundle.tombstones);
   return JSON.parse(
     JSON.stringify({
       schemaVersion: bundle.schemaVersion ?? 1,
@@ -88,6 +114,7 @@ export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
       favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
       history: [...bundle.history].sort((a, b) => a.id.localeCompare(b.id)),
       lastUpdatedDate: bundle.lastUpdatedDate ?? '',
+      ...(tombstones ? {tombstones} : {}),
     }),
   ) as MacroDataBundle;
 }
@@ -152,7 +179,7 @@ function loadWeightLog(): Record<string, number> {
   }
 }
 
-export function loadLocalMacroBundleRaw(): Omit<MacroDataBundle, 'schemaVersion'> {
+export function loadLocalMacroBundleRaw(): MacroDataBundle {
   let macros: MacroTotals = {calories: 0, protein: 0, carbs: 0, fat: 0};
   let goals: MacroTotals = {calories: 2000, protein: 150, carbs: 200, fat: 70};
   let dailyLog: Record<string, MacroTotals> = {};
@@ -201,7 +228,18 @@ export function loadLocalMacroBundleRaw(): Omit<MacroDataBundle, 'schemaVersion'
     /* ignore */
   }
 
-  return {
+  let tombstones = undefined;
+  try {
+    const tombstonesRaw = localStorage.getItem(STORAGE_TOMBSTONES);
+    if (tombstonesRaw) {
+      tombstones = normalizeTombstones(JSON.parse(tombstonesRaw));
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return canonicalMacroBundle({
+    schemaVersion: 1,
     macros,
     goals,
     dailyLog,
@@ -210,19 +248,26 @@ export function loadLocalMacroBundleRaw(): Omit<MacroDataBundle, 'schemaVersion'
     favorites,
     history,
     lastUpdatedDate,
-  };
+    tombstones,
+  });
 }
 
 export function saveLocalMacroBundle(bundle: MacroDataBundle, atMs = Date.now()) {
+  const canonical = canonicalMacroBundle(bundle);
   try {
-    localStorage.setItem('macros', JSON.stringify(bundle.macros));
-    localStorage.setItem('goals', JSON.stringify(bundle.goals));
-    localStorage.setItem('dailyLog', JSON.stringify(bundle.dailyLog));
-    localStorage.setItem('weightGoal', JSON.stringify(bundle.weightGoal));
-    localStorage.setItem('weightLog', JSON.stringify(bundle.weightLog));
-    localStorage.setItem('favorites', JSON.stringify(bundle.favorites));
-    localStorage.setItem('history', JSON.stringify(bundle.history));
-    localStorage.setItem('lastUpdatedDate', bundle.lastUpdatedDate);
+    localStorage.setItem('macros', JSON.stringify(canonical.macros));
+    localStorage.setItem('goals', JSON.stringify(canonical.goals));
+    localStorage.setItem('dailyLog', JSON.stringify(canonical.dailyLog));
+    localStorage.setItem('weightGoal', JSON.stringify(canonical.weightGoal));
+    localStorage.setItem('weightLog', JSON.stringify(canonical.weightLog));
+    localStorage.setItem('favorites', JSON.stringify(canonical.favorites));
+    localStorage.setItem('history', JSON.stringify(canonical.history));
+    localStorage.setItem('lastUpdatedDate', canonical.lastUpdatedDate);
+    if (canonical.tombstones) {
+      localStorage.setItem(STORAGE_TOMBSTONES, JSON.stringify(canonical.tombstones));
+    } else {
+      localStorage.removeItem(STORAGE_TOMBSTONES);
+    }
     markLocalBundleUpdatedAt(atMs);
   } catch {
     /* ignore quota */

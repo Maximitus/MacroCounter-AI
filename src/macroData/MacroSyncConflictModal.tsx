@@ -89,7 +89,7 @@ export function MacroSyncConflictModal({
 }: {
   conflict: MacroSyncConflictInfo;
   resolving: boolean;
-  onChoose: (choice: 'local' | 'remote') => void;
+  onChoose: (choice: 'local' | 'remote' | 'merge') => void;
 }) {
   const localSummary = summarizeMacroBundle(conflict.local);
   const remoteSummary = summarizeMacroBundle(conflict.remote);
@@ -120,8 +120,8 @@ export function MacroSyncConflictModal({
               Macro data differs
             </h2>
             <p id="macro-sync-conflict-body" className="mt-1 text-sm text-[var(--color-text-light)]">
-              Your account and this device have different saved macro data. Choose which copy to
-              keep — the other will be replaced.
+              Your account and this device have different saved macro data. Merge to keep entries
+              from both, or pick one side if you prefer.
             </p>
           </div>
         </div>
@@ -142,14 +142,22 @@ export function MacroSyncConflictModal({
         </div>
 
         <div className="shrink-0 border-t border-[var(--color-accent)]/10 p-5">
+          <button
+            type="button"
+            disabled={resolving}
+            onClick={() => onChoose('merge')}
+            className="mb-2.5 w-full rounded-full bg-[var(--color-accent)] py-2.5 text-sm font-medium text-white shadow-sm shadow-[var(--color-accent)]/20 transition-all duration-200 hover:-translate-y-px hover:bg-[var(--color-accent-hover)] hover:shadow-lg hover:shadow-[var(--color-accent)]/35 active:scale-[0.98] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-sm"
+          >
+            Merge both copies
+          </button>
           <div className="flex flex-row gap-2.5">
             <button
               type="button"
               disabled={resolving}
               onClick={() => onChoose('remote')}
-              className="min-w-0 flex-1 rounded-full bg-[var(--color-accent)] py-2.5 text-sm font-medium text-white shadow-sm shadow-[var(--color-accent)]/20 transition-all duration-200 hover:-translate-y-px hover:bg-[var(--color-accent-hover)] hover:shadow-lg hover:shadow-[var(--color-accent)]/35 active:scale-[0.98] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-sm"
+              className="min-w-0 flex-1 rounded-full border border-[var(--color-accent)]/20 bg-[var(--color-surface)] py-2.5 text-sm font-medium text-fg transition hover:border-[var(--color-accent)]/35 hover:bg-[var(--color-panel-hover)] active:scale-[0.98] disabled:opacity-50"
             >
-              Keep cloud copy
+              Keep cloud only
             </button>
             <button
               type="button"
@@ -157,7 +165,7 @@ export function MacroSyncConflictModal({
               onClick={() => onChoose('local')}
               className="min-w-0 flex-1 rounded-full border border-[var(--color-accent)]/20 bg-[var(--color-surface)] py-2.5 text-sm font-medium text-fg transition hover:border-[var(--color-accent)]/35 hover:bg-[var(--color-panel-hover)] active:scale-[0.98] disabled:opacity-50"
             >
-              Keep this device
+              Keep this device only
             </button>
           </div>
           {resolving ? (

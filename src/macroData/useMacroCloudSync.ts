@@ -1,18 +1,24 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {doc, onSnapshot, serverTimestamp, setDoc} from 'firebase/firestore';
+import {doc, getDoc, onSnapshot, serverTimestamp, setDoc} from 'firebase/firestore';
 import type {User} from 'firebase/auth';
 import toast from 'react-hot-toast';
 import {getFirebaseDb, isFirebaseConfigured} from '../firebase.ts';
+import {bundlesNeedCloudReconcile, mergeMacroBundles} from './mergeMacroBundles.ts';
 import {
   canonicalMacroBundle,
-  getLastSyncFingerprint,
+  getLastSyncedBundle,
   getLocalBundleUpdatedAtMs,
   loadLocalMacroBundleRaw,
   macroBundleFingerprint,
   markLocalBundleUpdatedAt,
   saveLocalMacroBundle,
-  setLastSyncFingerprint,
+  setLastSyncedBundle,
 } from './macroLocalPersistence.ts';
+import {
+  computeDeletionTombstones,
+  mergeTombstones,
+  tombstonesFromFirestore,
+} from './macroTombstones.ts';
 import type {FavoriteEntry, MacroDataBundle, MacroTotals, MealEntry} from './macroTypes.ts';
 import type {MacroSyncConflictInfo} from './MacroSyncConflictModal.tsx';
 
@@ -25,9 +31,23 @@ function macroDocRef(uid: string) {
   return doc(getFirebaseDb(), 'users', uid, 'macros', 'data');
 }
 
+function emptyMacroBundle(): MacroDataBundle {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    macros: {calories: 0, protein: 0, carbs: 0, fat: 0},
+    goals: {calories: 2000, protein: 150, carbs: 200, fat: 70},
+    dailyLog: {},
+    weightGoal: 0,
+    weightLog: {},
+    favorites: [],
+    history: [],
+    lastUpdatedDate: '',
+  };
+}
+
 function bundleFromSnapshot(raw: Record<string, unknown> | undefined): MacroDataBundle | null {
   if (!raw || typeof raw !== 'object') return null;
-  return {
+  return canonicalMacroBundle({
     schemaVersion: typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 1,
     macros: (raw.macros as MacroTotals) ?? {calories: 0, protein: 0, carbs: 0, fat: 0},
     goals: (raw.goals as MacroTotals) ?? {calories: 2000, protein: 150, carbs: 200, fat: 70},
@@ -43,7 +63,8 @@ function bundleFromSnapshot(raw: Record<string, unknown> | undefined): MacroData
     favorites: Array.isArray(raw.favorites) ? (raw.favorites as FavoriteEntry[]) : [],
     history: Array.isArray(raw.history) ? (raw.history as MealEntry[]) : [],
     lastUpdatedDate: typeof raw.lastUpdatedDate === 'string' ? raw.lastUpdatedDate : '',
-  };
+    tombstones: tombstonesFromFirestore(raw.tombstones),
+  });
 }
 
 function cloudHasData(bundle: MacroDataBundle): boolean {
@@ -72,75 +93,6 @@ function remoteUpdatedMs(raw: Record<string, unknown> | undefined): number {
     return (updatedAt as {toMillis: () => number}).toMillis();
   }
   return 0;
-}
-
-/**
- * Prompt only for a real fork — not cache layout drift after a successful sync.
- */
-function shouldPromptSyncConflict(
-  uid: string,
-  local: MacroDataBundle,
-  remote: MacroDataBundle,
-  localMs: number,
-  remoteMs: number,
-): boolean {
-  if (!localHasData(local) || !cloudHasData(remote)) return false;
-
-  const localFp = macroBundleFingerprint(local);
-  const remoteFp = macroBundleFingerprint(remote);
-  if (localFp === remoteFp) return false;
-
-  const lastSyncFp = getLastSyncFingerprint(uid);
-
-  // Already synced this cloud revision — local cache differs cosmetically (common on refresh)
-  if (lastSyncFp != null && lastSyncFp === remoteFp) return false;
-
-  // Device unchanged since last sync — accept remote update without prompting
-  if (lastSyncFp != null && lastSyncFp === localFp) return false;
-
-  // Cloud updated elsewhere; this device still matches what it last synced
-  if (
-    lastSyncFp != null &&
-    lastSyncFp === localFp &&
-    localFp !== remoteFp &&
-    localMs > 0 &&
-    remoteMs > 0 &&
-    remoteMs > localMs + WRITE_SKEW_MS
-  ) {
-    return false;
-  }
-
-  // Local edited after last sync while cloud is stale
-  if (
-    lastSyncFp != null &&
-    lastSyncFp === localFp &&
-    localFp !== remoteFp &&
-    localMs > remoteMs + WRITE_SKEW_MS
-  ) {
-    return true;
-  }
-
-  // Both sides diverged from last sync — only prompt if local looks edited
-  if (
-    lastSyncFp != null &&
-    lastSyncFp !== localFp &&
-    lastSyncFp !== remoteFp &&
-    localMs > 0 &&
-    remoteMs > 0 &&
-    localMs > remoteMs + WRITE_SKEW_MS
-  ) {
-    return true;
-  }
-
-  if (lastSyncFp == null) {
-    // First sync on this device — prefer cloud when timestamps say cloud is current
-    if (localMs > 0 && remoteMs > 0 && localMs <= remoteMs + WRITE_SKEW_MS) return false;
-    // Genuinely different content with no sync history — ask once (stale device / first link)
-    if (localMs > 0 && remoteMs > 0 && localMs > remoteMs + WRITE_SKEW_MS) return true;
-    return false;
-  }
-
-  return false;
 }
 
 function remoteToBundle(remote: MacroDataBundle): MacroDataBundle {
@@ -177,19 +129,54 @@ function applyBundleToState(
   flags.applyingRemote.current = false;
 }
 
-async function pushBundleToCloud(uid: string, bundle: MacroDataBundle) {
-  await setDoc(macroDocRef(uid), {
+async function writeBundleToCloud(uid: string, bundle: MacroDataBundle) {
+  const canonical = canonicalMacroBundle(bundle);
+  const payload: Record<string, unknown> = {
     schemaVersion: SCHEMA_VERSION,
-    macros: bundle.macros,
-    goals: bundle.goals,
-    dailyLog: bundle.dailyLog,
-    weightGoal: bundle.weightGoal,
-    weightLog: bundle.weightLog,
-    favorites: bundle.favorites,
-    history: bundle.history,
-    lastUpdatedDate: bundle.lastUpdatedDate,
+    macros: canonical.macros,
+    goals: canonical.goals,
+    dailyLog: canonical.dailyLog,
+    weightGoal: canonical.weightGoal,
+    weightLog: canonical.weightLog,
+    favorites: canonical.favorites,
+    history: canonical.history,
+    lastUpdatedDate: canonical.lastUpdatedDate,
     updatedAt: serverTimestamp(),
+  };
+  if (canonical.tombstones) payload.tombstones = canonical.tombstones;
+  await setDoc(macroDocRef(uid), payload);
+}
+
+async function reconcileAndPushToCloud(
+  uid: string,
+  localBundle: MacroDataBundle,
+  localUpdatedMs: number,
+): Promise<MacroDataBundle> {
+  const ref = macroDocRef(uid);
+  const snap = await getDoc(ref);
+  const baseline = getLastSyncedBundle(uid);
+  const remoteRaw = snap.exists() ? snap.data() : undefined;
+  const remoteBundle = remoteRaw
+    ? remoteToBundle(bundleFromSnapshot(remoteRaw) ?? emptyMacroBundle())
+    : emptyMacroBundle();
+  const remoteMs = remoteUpdatedMs(remoteRaw);
+  const deletionTombstones = computeDeletionTombstones(baseline, localBundle);
+  const tombstones = mergeTombstones(
+    deletionTombstones,
+    localBundle.tombstones,
+    remoteBundle.tombstones,
+    baseline?.tombstones,
+  );
+  const localPrepared = canonicalMacroBundle({...localBundle, tombstones});
+  const merged = mergeMacroBundles({
+    local: localPrepared,
+    remote: remoteBundle,
+    baseline,
+    localUpdatedMs: localUpdatedMs > 0 ? localUpdatedMs : Date.now(),
+    remoteUpdatedMs: remoteMs,
   });
+  await writeBundleToCloud(uid, merged);
+  return merged;
 }
 
 export type MacroCloudSyncProps = {
@@ -299,29 +286,91 @@ export function useMacroCloudSync({
 
   const cloudEnabled = isFirebaseConfigured() && !!user && ready && !syncConflict;
 
-  const recordSyncedBundle = (uid: string, bundle: MacroDataBundle) => {
-    const fp = macroBundleFingerprint(bundle);
-    baselineFingerprintRef.current = fp;
-    setLastSyncFingerprint(uid, fp);
+  const recordSyncedFingerprint = (_uid: string, bundle: MacroDataBundle) => {
+    baselineFingerprintRef.current = macroBundleFingerprint(bundle);
   };
 
-  const resolveSyncConflict = useCallback(async (choice: 'local' | 'remote') => {
+  const recordMergedBundle = (uid: string, bundle: MacroDataBundle) => {
+    recordSyncedFingerprint(uid, bundle);
+    setLastSyncedBundle(uid, bundle);
+  };
+
+  const applyReconciledPush = (
+    uid: string,
+    merged: MacroDataBundle,
+    localBundle: MacroDataBundle,
+    atMs: number,
+  ) => {
+    const mergedFp = macroBundleFingerprint(merged);
+    const localFp = macroBundleFingerprint(localBundle);
+    if (mergedFp !== localFp) {
+      applyBundleToState(merged, settersRef.current, applyFlags.current);
+    }
+    saveLocalMacroBundle(merged, atMs);
+    recordMergedBundle(uid, merged);
+    localDirty.current = false;
+  };
+
+  const applyMergedBundle = async (
+    uid: string,
+    merged: MacroDataBundle,
+    remoteBundle: MacroDataBundle,
+    remoteMs: number,
+    localUpdatedMs: number,
+  ) => {
+    applyBundleToState(merged, settersRef.current, applyFlags.current);
+    const mergedAt = Math.max(localUpdatedMs, remoteMs) || Date.now();
+    saveLocalMacroBundle(merged, mergedAt);
+    recordMergedBundle(uid, merged);
+
+    if (bundlesNeedCloudReconcile(merged, remoteBundle) && !pendingLocalSaveRef.current) {
+      try {
+        await writeBundleToCloud(uid, merged);
+        lastCommittedWriteMsRef.current = Date.now();
+        markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
+      } catch (e) {
+        console.error(e);
+        toast.error('Could not reconcile merged macro data');
+      }
+    }
+
+    localDirty.current = false;
+  };
+
+  const resolveSyncConflict = useCallback(async (choice: 'local' | 'remote' | 'merge') => {
     const conflict = syncConflictRef.current;
     const uid = userRef.current?.uid;
     if (!conflict || !uid) return;
 
     setResolvingConflict(true);
     conflictResolvedRef.current = true;
-    pendingLocalSaveRef.current = choice === 'local';
+    pendingLocalSaveRef.current = choice === 'local' || choice === 'merge';
 
     try {
-      if (choice === 'remote') {
-        applyBundleToState(conflict.remote, settersRef.current, applyFlags.current);
+      if (choice === 'merge') {
+        const merged = mergeMacroBundles({
+          local: conflict.local,
+          remote: conflict.remote,
+          baseline: getLastSyncedBundle(uid),
+          localUpdatedMs: conflict.localUpdatedMs,
+          remoteUpdatedMs: conflict.remoteUpdatedMs,
+        });
+        await applyMergedBundle(
+          uid,
+          merged,
+          remoteToBundle(conflict.remote),
+          conflict.remoteUpdatedMs,
+          conflict.localUpdatedMs,
+        );
+        toast.success('Merged macro data from both copies');
+      } else if (choice === 'remote') {
+        const remoteBundle = remoteToBundle(conflict.remote);
+        applyBundleToState(remoteBundle, settersRef.current, applyFlags.current);
         saveLocalMacroBundle(
-          conflict.remote,
+          remoteBundle,
           conflict.remoteUpdatedMs > 0 ? conflict.remoteUpdatedMs : Date.now(),
         );
-        recordSyncedBundle(uid, conflict.remote);
+        recordMergedBundle(uid, remoteBundle);
         localDirty.current = false;
         toast.success('Using cloud data');
       } else {
@@ -329,12 +378,14 @@ export function useMacroCloudSync({
           schemaVersion: SCHEMA_VERSION,
           ...conflict.local,
         };
-        await pushBundleToCloud(uid, localBundle);
+        const merged = await reconcileAndPushToCloud(
+          uid,
+          localBundle,
+          conflict.localUpdatedMs > 0 ? conflict.localUpdatedMs : Date.now(),
+        );
         lastCommittedWriteMsRef.current = Date.now();
         markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-        applyBundleToState(localBundle, settersRef.current, applyFlags.current);
-        recordSyncedBundle(uid, localBundle);
-        localDirty.current = false;
+        applyReconciledPush(uid, merged, localBundle, lastCommittedWriteMsRef.current);
         toast.success("Using this device's data");
       }
       setSyncConflict(null);
@@ -343,7 +394,11 @@ export function useMacroCloudSync({
       console.error(e);
       conflictResolvedRef.current = false;
       toast.error(
-        choice === 'remote' ? 'Could not apply cloud data' : "Could not upload this device's data",
+        choice === 'remote'
+          ? 'Could not apply cloud data'
+          : choice === 'merge'
+            ? 'Could not merge macro data'
+            : "Could not upload this device's data",
       );
     } finally {
       pendingLocalSaveRef.current = false;
@@ -359,16 +414,15 @@ export function useMacroCloudSync({
     debounceRef.current = null;
     const generation = ++localSaveGenerationRef.current;
     pendingLocalSaveRef.current = true;
-    const payload: MacroDataBundle = {
+    const payload: MacroDataBundle = canonicalMacroBundle({
       schemaVersion: SCHEMA_VERSION,
       ...bundleRef.current,
-    };
-    void pushBundleToCloud(uid, payload)
-      .then(() => {
+    });
+    void reconcileAndPushToCloud(uid, payload, getLocalBundleUpdatedAtMs())
+      .then((merged) => {
         lastCommittedWriteMsRef.current = Date.now();
         markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-        recordSyncedBundle(uid, payload);
-        localDirty.current = false;
+        applyReconciledPush(uid, merged, payload, lastCommittedWriteMsRef.current);
       })
       .catch((e) => {
         console.error(e);
@@ -423,9 +477,18 @@ export function useMacroCloudSync({
       ref,
       async (snap) => {
         const localFromStorage = loadLocalMacroBundleRaw();
-        const localBundle = canonicalMacroBundle({
+        const live = bundleRef.current;
+        const localBundle: MacroDataBundle = canonicalMacroBundle({
           schemaVersion: SCHEMA_VERSION,
-          ...localFromStorage,
+          macros: live.macros,
+          goals: live.goals,
+          dailyLog: live.dailyLog,
+          weightGoal: live.weightGoal,
+          weightLog: live.weightLog,
+          favorites: live.favorites,
+          history: live.history,
+          lastUpdatedDate: live.lastUpdatedDate,
+          tombstones: localFromStorage.tombstones,
         });
         const localUpdatedMs = getLocalBundleUpdatedAtMs();
 
@@ -433,11 +496,14 @@ export function useMacroCloudSync({
           if (!migratedRef.current && localHasData(localBundle)) {
             migratedRef.current = true;
             try {
-              await pushBundleToCloud(user.uid, localBundle);
+              const merged = await reconcileAndPushToCloud(
+                user.uid,
+                localBundle,
+                localUpdatedMs > 0 ? localUpdatedMs : Date.now(),
+              );
               lastCommittedWriteMsRef.current = Date.now();
               markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-              recordSyncedBundle(user.uid, localBundle);
-              localDirty.current = false;
+              applyReconciledPush(user.uid, merged, localBundle, lastCommittedWriteMsRef.current);
               toast.success('Macro data uploaded to your account');
             } catch (e) {
               console.error(e);
@@ -463,11 +529,14 @@ export function useMacroCloudSync({
         if (!cloudHasData(remote) && !migratedRef.current && localHasData(localBundle)) {
           migratedRef.current = true;
           try {
-            await pushBundleToCloud(user.uid, localBundle);
+            const merged = await reconcileAndPushToCloud(
+              user.uid,
+              localBundle,
+              localUpdatedMs > 0 ? localUpdatedMs : Date.now(),
+            );
             lastCommittedWriteMsRef.current = Date.now();
             markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-            recordSyncedBundle(user.uid, localBundle);
-            localDirty.current = false;
+            applyReconciledPush(user.uid, merged, localBundle, lastCommittedWriteMsRef.current);
             toast.success('Macro data uploaded to your account');
           } catch (e) {
             console.error(e);
@@ -488,32 +557,21 @@ export function useMacroCloudSync({
           !snap.metadata.hasPendingWrites &&
           !staleRemote
         ) {
-          const remoteBundle = remoteToBundle({
-            schemaVersion: SCHEMA_VERSION,
-            ...remote,
+          const remoteBundle = remoteToBundle(remote);
+          const merged = mergeMacroBundles({
+            local: localBundle,
+            remote: remoteBundle,
+            baseline: getLastSyncedBundle(user.uid),
+            localUpdatedMs,
+            remoteUpdatedMs: remoteMs,
           });
 
-          if (
-            !conflictResolvedRef.current &&
-            shouldPromptSyncConflict(user.uid, localBundle, remoteBundle, localUpdatedMs, remoteMs)
-          ) {
-            if (!syncConflictRef.current) {
-              setSyncConflict({
-                local: canonicalMacroBundle(localBundle),
-                remote: remoteBundle,
-                localUpdatedMs,
-                remoteUpdatedMs: remoteMs,
-              });
-            }
-            setSyncing(false);
-            return;
-          }
-
           if (!conflictResolvedRef.current) {
-            applyBundleToState(remoteBundle, settersRef.current, applyFlags.current);
-            saveLocalMacroBundle(remoteBundle, remoteMs > 0 ? remoteMs : Date.now());
-            recordSyncedBundle(user.uid, remoteBundle);
-            localDirty.current = false;
+            try {
+              await applyMergedBundle(user.uid, merged, remoteBundle, remoteMs, localUpdatedMs);
+            } catch (e) {
+              console.error(e);
+            }
           } else {
             const remoteFp = macroBundleFingerprint(remoteBundle);
             const localFp = macroBundleFingerprint(localBundle);
@@ -524,10 +582,11 @@ export function useMacroCloudSync({
               remoteFp !== baseline &&
               remoteMs > lastCommittedWriteMsRef.current - WRITE_SKEW_MS
             ) {
-              applyBundleToState(remoteBundle, settersRef.current, applyFlags.current);
-              saveLocalMacroBundle(remoteBundle, remoteMs > 0 ? remoteMs : Date.now());
-              recordSyncedBundle(user.uid, remoteBundle);
-              localDirty.current = false;
+              try {
+                await applyMergedBundle(user.uid, merged, remoteBundle, remoteMs, localUpdatedMs);
+              } catch (e) {
+                console.error(e);
+              }
             }
           }
         }
@@ -555,10 +614,12 @@ export function useMacroCloudSync({
       return;
     }
 
-    const fp = macroBundleFingerprint({
-      schemaVersion: SCHEMA_VERSION,
-      ...bundleRef.current,
-    });
+    const fp = macroBundleFingerprint(
+      canonicalMacroBundle({
+        schemaVersion: SCHEMA_VERSION,
+        ...bundleRef.current,
+      }),
+    );
     if (baselineFingerprintRef.current != null && fp === baselineFingerprintRef.current) {
       return;
     }
@@ -570,16 +631,15 @@ export function useMacroCloudSync({
     pendingLocalSaveRef.current = true;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const payload: MacroDataBundle = {
+      const payload: MacroDataBundle = canonicalMacroBundle({
         schemaVersion: SCHEMA_VERSION,
         ...bundleRef.current,
-      };
-      void pushBundleToCloud(user!.uid, payload)
-        .then(() => {
+      });
+      void reconcileAndPushToCloud(user!.uid, payload, getLocalBundleUpdatedAtMs())
+        .then((merged) => {
           lastCommittedWriteMsRef.current = Date.now();
           markLocalBundleUpdatedAt(lastCommittedWriteMsRef.current);
-          recordSyncedBundle(user!.uid, payload);
-          localDirty.current = false;
+          applyReconciledPush(user!.uid, merged, payload, lastCommittedWriteMsRef.current);
         })
         .catch((e) => {
           console.error(e);

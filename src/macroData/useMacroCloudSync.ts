@@ -92,8 +92,13 @@ function shouldPromptSyncConflict(
 
   const lastSyncFp = getLastSyncFingerprint(uid);
 
+  // Already synced this cloud revision — local cache differs cosmetically (common on refresh)
   if (lastSyncFp != null && lastSyncFp === remoteFp) return false;
 
+  // Device unchanged since last sync — accept remote update without prompting
+  if (lastSyncFp != null && lastSyncFp === localFp) return false;
+
+  // Cloud updated elsewhere; this device still matches what it last synced
   if (
     lastSyncFp != null &&
     lastSyncFp === localFp &&
@@ -105,6 +110,7 @@ function shouldPromptSyncConflict(
     return false;
   }
 
+  // Local edited after last sync while cloud is stale
   if (
     lastSyncFp != null &&
     lastSyncFp === localFp &&
@@ -114,12 +120,22 @@ function shouldPromptSyncConflict(
     return true;
   }
 
-  if (lastSyncFp != null && lastSyncFp !== localFp && lastSyncFp !== remoteFp) {
+  // Both sides diverged from last sync — only prompt if local looks edited
+  if (
+    lastSyncFp != null &&
+    lastSyncFp !== localFp &&
+    lastSyncFp !== remoteFp &&
+    localMs > 0 &&
+    remoteMs > 0 &&
+    localMs > remoteMs + WRITE_SKEW_MS
+  ) {
     return true;
   }
 
   if (lastSyncFp == null) {
-    if (localMs <= 0 && remoteMs > 0) return true;
+    // First sync on this device — prefer cloud when timestamps say cloud is current
+    if (localMs > 0 && remoteMs > 0 && localMs <= remoteMs + WRITE_SKEW_MS) return false;
+    // Genuinely different content with no sync history — ask once (stale device / first link)
     if (localMs > 0 && remoteMs > 0 && localMs > remoteMs + WRITE_SKEW_MS) return true;
     return false;
   }
@@ -407,10 +423,10 @@ export function useMacroCloudSync({
       ref,
       async (snap) => {
         const localFromStorage = loadLocalMacroBundleRaw();
-        const localBundle: MacroDataBundle = {
+        const localBundle = canonicalMacroBundle({
           schemaVersion: SCHEMA_VERSION,
           ...localFromStorage,
-        };
+        });
         const localUpdatedMs = getLocalBundleUpdatedAtMs();
 
         if (!snap.exists()) {

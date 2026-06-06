@@ -2,8 +2,28 @@ import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
 
 export const STORAGE_BUNDLE_UPDATED_AT = 'macrocounter_bundle_updated_at_v1';
 
+function sortRecordKeys<T>(record: Record<string, T>): Record<string, T> {
+  const sorted: Record<string, T> = {};
+  for (const k of Object.keys(record).sort()) sorted[k] = record[k];
+  return sorted;
+}
+
+/** Deterministic JSON — object key order does not affect the fingerprint. */
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+  const keys = Object.keys(value as object).sort();
+  const pairs = keys.map(
+    (k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`,
+  );
+  return `{${pairs.join(',')}}`;
+}
+
 function lastSyncFingerprintKey(uid: string) {
-  return `macrocounter_last_sync_fp_v1_${uid}`;
+  return `macrocounter_last_sync_fp_v2_${uid}`;
 }
 
 export function getLastSyncFingerprint(uid: string): string | null {
@@ -35,21 +55,38 @@ function normalizeWeightLog(weightLog: Record<string, number>): Record<string, n
   return next;
 }
 
+function normalizeMacroTotals(t: MacroTotals): MacroTotals {
+  return {
+    calories: Math.round(Number(t.calories) || 0),
+    protein: Math.round(Number(t.protein) || 0),
+    carbs: Math.round(Number(t.carbs) || 0),
+    fat: Math.round(Number(t.fat) || 0),
+  };
+}
+
+function normalizeDailyLog(dailyLog: Record<string, MacroTotals>): Record<string, MacroTotals> {
+  const next: Record<string, MacroTotals> = {};
+  for (const k of Object.keys(dailyLog).sort()) {
+    next[k] = normalizeMacroTotals(dailyLog[k] ?? {calories: 0, protein: 0, carbs: 0, fat: 0});
+  }
+  return next;
+}
+
 /** Strip undefined / Firestore-vs-local JSON noise before compare. */
 export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
   return JSON.parse(
     JSON.stringify({
       schemaVersion: bundle.schemaVersion ?? 1,
-      macros: bundle.macros,
-      goals: bundle.goals,
-      dailyLog: bundle.dailyLog,
+      macros: normalizeMacroTotals(bundle.macros),
+      goals: normalizeMacroTotals(bundle.goals),
+      dailyLog: normalizeDailyLog(bundle.dailyLog),
       weightGoal:
         typeof bundle.weightGoal === 'number' && Number.isFinite(bundle.weightGoal)
-          ? bundle.weightGoal
+          ? Math.round(bundle.weightGoal * 10) / 10
           : 0,
-      weightLog: normalizeWeightLog(bundle.weightLog),
-      favorites: bundle.favorites,
-      history: bundle.history,
+      weightLog: sortRecordKeys(normalizeWeightLog(bundle.weightLog)),
+      favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
+      history: [...bundle.history].sort((a, b) => a.id.localeCompare(b.id)),
       lastUpdatedDate: bundle.lastUpdatedDate ?? '',
     }),
   ) as MacroDataBundle;
@@ -76,7 +113,7 @@ export function getLocalBundleUpdatedAtMs(): number {
 /** Compact fingerprint for comparing local vs remote bundles. */
 export function macroBundleFingerprint(bundle: MacroDataBundle): string {
   const c = canonicalMacroBundle(bundle);
-  return JSON.stringify({
+  return stableStringify({
     macros: c.macros,
     goals: c.goals,
     dailyLog: c.dailyLog,

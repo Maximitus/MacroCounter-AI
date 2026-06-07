@@ -19,6 +19,7 @@ import {
   mergeTombstones,
   tombstonesFromFirestore,
 } from './macroTombstones.ts';
+import {filterTodayMealHistory} from './mealHistory.ts';
 import type {FavoriteEntry, MacroDataBundle, MacroTotals, MealEntry} from './macroTypes.ts';
 import type {MacroSyncConflictInfo} from './MacroSyncConflictModal.tsx';
 
@@ -124,7 +125,7 @@ function applyBundleToState(
   setters.setWeightGoal(bundle.weightGoal);
   setters.setWeightLog(bundle.weightLog);
   setters.setFavorites(bundle.favorites);
-  setters.setHistory(bundle.history);
+  setters.setHistory(filterTodayMealHistory(bundle.history));
   if (bundle.lastUpdatedDate) setters.setLastUpdatedDate(bundle.lastUpdatedDate);
   flags.applyingRemote.current = false;
 }

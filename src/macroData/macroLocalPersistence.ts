@@ -1,3 +1,4 @@
+import {filterTodayMealHistory} from './mealHistory.ts';
 import {normalizeTombstones} from './macroTombstones.ts';
 import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
 
@@ -112,7 +113,7 @@ export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
           : 0,
       weightLog: sortRecordKeys(normalizeWeightLog(bundle.weightLog)),
       favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
-      history: [...bundle.history].sort((a, b) => a.id.localeCompare(b.id)),
+      history: filterTodayMealHistory(bundle.history).sort((a, b) => a.id.localeCompare(b.id)),
       lastUpdatedDate: bundle.lastUpdatedDate ?? '',
       ...(tombstones ? {tombstones} : {}),
     }),

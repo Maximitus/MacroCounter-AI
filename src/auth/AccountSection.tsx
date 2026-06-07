@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import toast from 'react-hot-toast';
 import {useAuth} from './AuthContext.tsx';
+import {GoogleSignInButton} from './GoogleSignInButton.tsx';
 import {useMacroCloudSyncStatus} from '../macroData/MacroCloudSyncContext.tsx';
 
 function authErrorMessage(error: unknown): string {
@@ -12,9 +13,6 @@ function authErrorMessage(error: unknown): string {
 
 const inputClass =
   'w-full rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45';
-
-const btnPrimary =
-  'w-full rounded-full bg-[var(--color-accent)] py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50';
 
 const btnSecondary =
   'w-full rounded-full bg-[var(--color-surface)] py-2 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-50';
@@ -98,14 +96,11 @@ export function AccountSection() {
           <p className="text-[11px] leading-snug text-[#9ca3af]">
             Link Google or email to keep this guest session.
           </p>
-          <button
-            type="button"
+          <GoogleSignInButton
             disabled={busy}
+            label="Sign in with Google"
             onClick={() => run(linkGoogle, 'Account linked with Google')}
-            className={btnPrimary}
-          >
-            Link Google
-          </button>
+          />
           <details className="group rounded-lg border border-[var(--color-accent)]/10 bg-[var(--color-surface)]/50">
             <summary className="cursor-pointer list-none px-2.5 py-2 text-xs font-medium text-fg marker:content-none [&::-webkit-details-marker]:hidden">
               Link email
@@ -195,14 +190,10 @@ export function AccountSection() {
       </div>
       {openPanel === 'sign-in' ? (
         <section className="space-y-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-surface)]/60 p-2.5">
-          <button
-            type="button"
+          <GoogleSignInButton
             disabled={busy}
             onClick={() => run(signInGoogle, 'Signed in with Google')}
-            className={btnPrimary}
-          >
-            Google
-          </button>
+          />
           <input
             type="email"
             autoComplete="email"
@@ -231,14 +222,11 @@ export function AccountSection() {
       ) : null}
       {openPanel === 'create' ? (
         <section className="space-y-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-surface)]/60 p-2.5">
-          <button
-            type="button"
+          <GoogleSignInButton
             disabled={busy}
+            label="Sign up with Google"
             onClick={() => run(signInGoogle, 'Account created with Google')}
-            className={btnPrimary}
-          >
-            Google
-          </button>
+          />
           <input
             type="email"
             autoComplete="email"

@@ -48,6 +48,7 @@ import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import {filterTodayMealHistory} from './macroData/mealHistory.ts';
 import {MacroSyncConflictModal} from './macroData/MacroSyncConflictModal.tsx';
 import {SettingsModal} from './SettingsModal.tsx';
 import {SettingsMenu} from './SettingsMenu.tsx';
@@ -801,7 +802,8 @@ export default function App() {
   const [textDescription, setTextDescription] = useState('');
   const [history, setHistory] = useState<{id: string, name: string, macros: typeof manualMacros}[]>(() => {
     const saved = localStorage.getItem('history');
-    return saved ? JSON.parse(saved) : [];
+    const parsed = saved ? JSON.parse(saved) : [];
+    return filterTodayMealHistory(parsed);
   });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -917,6 +919,13 @@ export default function App() {
       localStorage.setItem('lastUpdatedDate', today);
     }
   }, [lastUpdatedDate]);
+
+  useEffect(() => {
+    const todayOnly = filterTodayMealHistory(history);
+    if (todayOnly.length !== history.length) {
+      setHistory(todayOnly);
+    }
+  }, [history]);
 
   useEffect(() => {
     localStorage.setItem('macros', JSON.stringify(macros));

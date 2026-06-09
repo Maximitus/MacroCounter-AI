@@ -813,7 +813,6 @@ export default function App() {
     saveBodyWeightLb,
     saveWeightUnit,
   } = useSocial();
-  const lastLocalWeightPushRef = useRef<number | null>(null);
   const [guestWeightUnit, setGuestWeightUnit] = useState<WeightUnit>(() => {
     const saved = localStorage.getItem('weightUnit');
     return saved === 'kg' ? 'kg' : 'lb';
@@ -867,6 +866,13 @@ export default function App() {
       return {};
     }
   });
+  const markLocalProfileWeightPush = useApplyProfileBodyWeight(
+    socialEnabled,
+    user?.uid,
+    socialProfile,
+    getTodayKey,
+    setWeightLog,
+  );
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
   /** Raw text while editing weight goal in Set goals modal (decimals like "165.") */
   const [weightGoalFieldDraft, setWeightGoalFieldDraft] = useState<string | null>(null);
@@ -965,7 +971,6 @@ export default function App() {
   });
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
-  useApplyProfileBodyWeight(socialEnabled, socialProfile, getTodayKey, setWeightLog, lastLocalWeightPushRef);
 
   const aiCoachInputs = useMemo(
     () => ({
@@ -1610,7 +1615,7 @@ export default function App() {
               }
             }}
             onLogWeight={(w) => {
-              lastLocalWeightPushRef.current = w;
+              markLocalProfileWeightPush(w);
               setWeightLog((prev) => ({...prev, [getTodayKey()]: w}));
               if (socialEnabled && user) {
                 void saveBodyWeightLb(w).catch((e) => console.error('Could not sync weight to profile', e));
@@ -2371,7 +2376,7 @@ export default function App() {
                           const cw = parseOptionalAiWeightLb(result.currentWeightLb);
                           const tw = parseOptionalAiWeightLb(result.targetWeightLb);
                           if (cw != null) {
-                            lastLocalWeightPushRef.current = cw;
+                            markLocalProfileWeightPush(cw);
                             setWeightLog((prev) => ({
                               ...prev,
                               [getTodayKey()]: cw,

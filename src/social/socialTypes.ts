@@ -6,7 +6,7 @@ export type UserProfile = {
   displayName: string;
   friendCode: string;
   gender?: ProfileGender;
-  /** Latest body weight in lb — synced with Macro `weightLog`. */
+  /** Latest body weight in lb — shared profile; logs to Macro `weightLog` only when this value changes. */
   bodyWeightLb?: number;
   /** Height in centimeters — shared with Workout app. */
   heightCm?: number;

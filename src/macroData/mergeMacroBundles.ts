@@ -174,6 +174,12 @@ export function mergeMacroBundles({
       localUpdatedMs,
       remoteUpdatedMs,
     ),
+    calorieGoalMode: pickNewer(
+      localCanon.calorieGoalMode,
+      remoteCanon.calorieGoalMode,
+      localUpdatedMs,
+      remoteUpdatedMs,
+    ),
     weightLog: mergeStringKeyedRecords(
       localCanon.weightLog,
       remoteCanon.weightLog,

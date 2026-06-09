@@ -8,20 +8,9 @@ type GeminiPart =
   | {text: string}
   | {inlineData: {mimeType: string; data: string}};
 
-export async function generateContentJson(params: {
-  parts: GeminiPart[];
-}): Promise<string> {
-  const res = await fetch(chatEndpoint(), {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      model: MODEL,
-      contents: [{role: 'user', parts: params.parts}],
-      generationConfig: {responseMimeType: 'application/json'},
-    }),
-  });
+export type {GeminiPart};
 
-  const raw = await res.text();
+function parseGeminiTextResponse(res: Response, raw: string): string {
   let data: {
     error?: {message?: string; hint?: string};
     candidates?: {content?: {parts?: {text?: string}[]}}[];
@@ -45,4 +34,51 @@ export async function generateContentJson(params: {
     throw new Error('No text in Gemini response');
   }
   return text;
+}
+
+export async function generateContentJson(params: {
+  parts: GeminiPart[];
+}): Promise<string> {
+  const res = await fetch(chatEndpoint(), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      model: MODEL,
+      contents: [{role: 'user', parts: params.parts}],
+      generationConfig: {responseMimeType: 'application/json'},
+    }),
+  });
+
+  const raw = await res.text();
+  return parseGeminiTextResponse(res, raw);
+}
+
+/** Multi-turn chat (no JSON response mode). */
+export async function generateChat(params: {
+  contents: {role: 'user' | 'model'; parts: GeminiPart[]}[];
+  systemInstruction?: string;
+}): Promise<string> {
+  if (!params.contents?.length) {
+    throw new Error('Chat request has no messages (contents empty)');
+  }
+  const body: Record<string, unknown> = {
+    model: MODEL,
+    contents: params.contents,
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.75,
+    },
+  };
+  if (params.systemInstruction) {
+    body.systemInstruction = {parts: [{text: params.systemInstruction}]};
+  }
+
+  const res = await fetch(chatEndpoint(), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+
+  const raw = await res.text();
+  return parseGeminiTextResponse(res, raw);
 }

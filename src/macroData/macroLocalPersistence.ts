@@ -1,4 +1,5 @@
 import {filterTodayMealHistory} from './mealHistory.ts';
+import {normalizeCalorieGoalMode} from '../macroProgress.ts';
 import {normalizeTombstones} from './macroTombstones.ts';
 import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
 
@@ -111,6 +112,7 @@ export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
         typeof bundle.weightGoal === 'number' && Number.isFinite(bundle.weightGoal)
           ? Math.round(bundle.weightGoal * 10) / 10
           : 0,
+      calorieGoalMode: normalizeCalorieGoalMode(bundle.calorieGoalMode),
       weightLog: sortRecordKeys(normalizeWeightLog(bundle.weightLog)),
       favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
       history: filterTodayMealHistory(bundle.history).sort((a, b) => a.id.localeCompare(b.id)),
@@ -146,11 +148,21 @@ export function macroBundleFingerprint(bundle: MacroDataBundle): string {
     goals: c.goals,
     dailyLog: c.dailyLog,
     weightGoal: c.weightGoal,
+    calorieGoalMode: c.calorieGoalMode,
     weightLog: c.weightLog,
     favorites: c.favorites,
     history: c.history,
     lastUpdatedDate: c.lastUpdatedDate,
   });
+}
+
+function loadCalorieGoalMode() {
+  try {
+    const saved = localStorage.getItem('calorieGoalMode');
+    return normalizeCalorieGoalMode(saved);
+  } catch {
+    return normalizeCalorieGoalMode(undefined);
+  }
 }
 
 function loadWeightGoal(): number {
@@ -245,6 +257,7 @@ export function loadLocalMacroBundleRaw(): MacroDataBundle {
     goals,
     dailyLog,
     weightGoal: loadWeightGoal(),
+    calorieGoalMode: loadCalorieGoalMode(),
     weightLog: loadWeightLog(),
     favorites,
     history,
@@ -260,6 +273,7 @@ export function saveLocalMacroBundle(bundle: MacroDataBundle, atMs = Date.now())
     localStorage.setItem('goals', JSON.stringify(canonical.goals));
     localStorage.setItem('dailyLog', JSON.stringify(canonical.dailyLog));
     localStorage.setItem('weightGoal', JSON.stringify(canonical.weightGoal));
+    localStorage.setItem('calorieGoalMode', canonical.calorieGoalMode);
     localStorage.setItem('weightLog', JSON.stringify(canonical.weightLog));
     localStorage.setItem('favorites', JSON.stringify(canonical.favorites));
     localStorage.setItem('history', JSON.stringify(canonical.history));

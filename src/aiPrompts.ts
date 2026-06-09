@@ -25,7 +25,8 @@ const MACRO_GOALS_AI_SHAPE = [
   '  "carbs": number,',
   '  "fat": number,',
   '  "currentWeightLb": number | null,',
-  '  "targetWeightLb": number | null',
+  '  "targetWeightLb": number | null,',
+  '  "calorieGoalMode": "lose" | "maintain" | "gain"',
   '}',
 ].join('\n');
 
@@ -164,6 +165,11 @@ export function promptDailyMacroGoals(userNotes: string): string {
     '- If the user states their current body weight (e.g. "I weigh 180", "currently 82 kg"), set currentWeightLb to that value converted to pounds when needed (1 kg ≈ 2.20462 lb). Use null if not stated.',
     '- If the user states a target or goal weight (e.g. "want to get to 165", "goal 75 kg"), set targetWeightLb similarly in pounds. Use null if not stated.',
     '- Use one decimal when helpful; avoid inventing weights that were not implied.',
+    '',
+    'Set calorieGoalMode from the user goal:',
+    '- "lose" for fat loss / cut / deficit',
+    '- "gain" for muscle gain / bulk / surplus',
+    '- "maintain" when maintaining weight or goal is unclear',
     JSON_ONLY,
     `Output shape: ${MACRO_GOALS_AI_SHAPE}`,
     '',

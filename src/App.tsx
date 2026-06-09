@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, ChangeEvent, useEffect } from 'react';
+import { useState, useRef, ChangeEvent, useEffect, useMemo } from 'react';
 import {useLocation, useNavigate} from 'react-router-dom';
 import {
   Camera,
   ClipboardList,
   Loader2,
+  MessageCircle,
   MessageSquare,
   MoreVertical,
   X,
@@ -44,11 +45,24 @@ import {
   promptMealItemsFromImage,
   promptSnackFromIngredients,
 } from './aiPrompts';
+import {AiChatScreen} from './AiChatScreen.tsx';
+import {recentDailyTotalsFromLog} from './aiCoachContext';
 import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import type {CalorieGoalMode} from './macroData/macroTypes.ts';
 import {filterTodayMealHistory} from './macroData/mealHistory.ts';
+import {
+  calorieGoalModeLabel,
+  MACRO_RING_COLORS,
+  macroDayIndicator,
+  macroGoalFieldLabel,
+  macroRingColor,
+  macroRingStatus,
+  normalizeCalorieGoalMode,
+  type MacroKey,
+} from './macroProgress.ts';
 import {MacroSyncConflictModal} from './macroData/MacroSyncConflictModal.tsx';
 import {SettingsModal} from './SettingsModal.tsx';
 import {SettingsMenu} from './SettingsMenu.tsx';
@@ -66,36 +80,32 @@ import {
 } from './macroUtils';
 
 const MACRO_ORDER = ['calories', 'protein', 'carbs', 'fat'] as const;
-type MacroKey = (typeof MACRO_ORDER)[number];
-
-const MACRO_RING_COLORS: Record<MacroKey, string> = {
-  calories: 'var(--color-accent)',
-  protein: '#38bdf8',
-  carbs: '#c4b5fd',
-  fat: '#f472b6',
-};
 
 function MacroProgressWheel({
   macroKey,
   current,
   goal,
+  calorieGoalMode,
 }: {
   macroKey: MacroKey;
   current: number;
   goal: number;
+  calorieGoalMode: CalorieGoalMode;
 }) {
   const safeGoal = goal > 0 ? goal : 1;
   const ratio = current / safeGoal;
   const displayPct = Math.round(ratio * 100);
   const arcRatio = Math.min(1, ratio);
-  const overGoal = ratio >= 1;
   const size = 100;
   const stroke = 7;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - arcRatio);
-  const ringColor = overGoal ? '#34d399' : MACRO_RING_COLORS[macroKey];
-  const label = macroKey.charAt(0).toUpperCase() + macroKey.slice(1);
+  const ringColor = macroRingColor(macroKey, current, goal, calorieGoalMode);
+  const status = macroRingStatus(macroKey, current, goal, calorieGoalMode);
+  const label = macroGoalFieldLabel(macroKey);
+  const statusText =
+    status === 'good' ? 'on track' : status === 'bad' ? 'over limit or off plan' : 'in progress';
 
   return (
     <div
@@ -104,8 +114,8 @@ function MacroProgressWheel({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.min(100, displayPct)}
-      aria-valuetext={`${displayPct}% of ${label} goal`}
-      aria-label={`${label} progress toward daily goal`}
+      aria-valuetext={`${displayPct}% of ${label}, ${statusText}`}
+      aria-label={`${label} progress`}
     >
       <svg
         className="absolute inset-0 -rotate-90"
@@ -152,11 +162,13 @@ function MacroCalendar({
   dailyLog,
   todayMacros,
   goals,
+  calorieGoalMode,
   onClose,
 }: {
   dailyLog: Record<string, MacroTotals>;
   todayMacros: MacroTotals;
   goals: MacroTotals;
+  calorieGoalMode: CalorieGoalMode;
   onClose: () => void;
 }) {
   const [selectedMacro, setSelectedMacro] = useState<MacroKey>('calories');
@@ -177,7 +189,7 @@ function MacroCalendar({
     else setViewMonth(viewMonth + 1);
   };
 
-  const getDayData = (day: number): 'up' | 'down' | null => {
+  const getDayData = (day: number): 'good' | 'bad' | null => {
     const key = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     let entry: MacroTotals | undefined;
     if (key === todayKey) {
@@ -188,7 +200,7 @@ function MacroCalendar({
     if (!entry) return null;
     const total = entry[selectedMacro];
     if (total === 0 && key !== todayKey) return null;
-    return total >= goals[selectedMacro] ? 'up' : 'down';
+    return macroDayIndicator(selectedMacro, total, goals[selectedMacro], calorieGoalMode);
   };
 
   const isToday = (day: number) => {
@@ -276,11 +288,11 @@ function MacroCalendar({
                 <span className={`text-xs tabular-nums ${today ? 'font-bold text-fg' : 'text-[var(--color-text-light)]'}`}>
                   {day}
                 </span>
-                {status === 'up' && (
-                  <ChevronUp className="h-4 w-4" style={{ color: macroColor }} strokeWidth={3} />
+                {status === 'good' && (
+                  <ChevronUp className="h-4 w-4 text-[#34d399]" strokeWidth={3} />
                 )}
-                {status === 'down' && (
-                  <ChevronDown className="h-4 w-4 text-[var(--color-text-light)]" strokeWidth={3} />
+                {status === 'bad' && (
+                  <ChevronDown className="h-4 w-4 text-[#f87171]" strokeWidth={3} />
                 )}
                 {status === null && (
                   <div className="h-4 w-4" />
@@ -736,6 +748,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTermsOpen, setSettingsTermsOpen] = useState(false);
   const [socialOpen, setSocialOpen] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [showSocialOnOverview, setShowSocialOnOverview] = useState(loadShowSocialOnOverview);
   const [showWeightSection, setShowWeightSection] = useState(loadShowWeightSection);
 
@@ -759,6 +772,9 @@ export default function App() {
     const n = parseFloat(saved);
     return Number.isFinite(n) ? n : 0;
   });
+  const [calorieGoalMode, setCalorieGoalMode] = useState<CalorieGoalMode>(() =>
+    normalizeCalorieGoalMode(localStorage.getItem('calorieGoalMode')),
+  );
   const [weightLog, setWeightLog] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem('weightLog');
     if (!saved) return {};
@@ -855,6 +871,7 @@ export default function App() {
     goals,
     dailyLog,
     weightGoal,
+    calorieGoalMode,
     weightLog,
     favorites,
     history,
@@ -863,6 +880,7 @@ export default function App() {
     setGoals,
     setDailyLog,
     setWeightGoal,
+    setCalorieGoalMode,
     setWeightLog,
     setFavorites,
     setHistory,
@@ -870,6 +888,32 @@ export default function App() {
   });
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
+
+  const aiCoachInputs = useMemo(
+    () => ({
+      goals,
+      calorieGoalMode,
+      todayTotals: macros,
+      todayMeals: history.map((meal) => ({
+        name: meal.name,
+        loggedAt: Number.isFinite(Number(meal.id))
+          ? new Date(Number(meal.id)).toLocaleString()
+          : 'today',
+        macros: meal.macros,
+      })),
+      recentDailyTotals: recentDailyTotalsFromLog(dailyLog, 7, getTodayKey()),
+    }),
+    [goals, calorieGoalMode, macros, history, dailyLog],
+  );
+
+  useEffect(() => {
+    if (!coachOpen && !syncConflict) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [coachOpen, syncConflict]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -938,7 +982,8 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('weightLog', JSON.stringify(weightLog));
     localStorage.setItem('weightGoal', JSON.stringify(weightGoal));
-  }, [weightLog, weightGoal]);
+    localStorage.setItem('calorieGoalMode', calorieGoalMode);
+  }, [weightLog, weightGoal, calorieGoalMode]);
 
   useEffect(() => {
     if (!syncConflict) return;
@@ -1343,6 +1388,14 @@ export default function App() {
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
+            onClick={() => setCoachOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+            aria-label="Open AI Coach"
+          >
+            <MessageCircle className="h-5 w-5" aria-hidden />
+          </button>
+          <button
+            type="button"
             onClick={() => setSocialOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
             aria-label="Open Social"
@@ -1397,7 +1450,12 @@ export default function App() {
                       key={key}
                       className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4 sm:p-5"
                     >
-                      <MacroProgressWheel macroKey={key} current={value} goal={goal} />
+                      <MacroProgressWheel
+                        macroKey={key}
+                        current={value}
+                        goal={goal}
+                        calorieGoalMode={calorieGoalMode}
+                      />
                       <div className="w-full min-w-0 text-center">
                         <p className="text-sm font-medium capitalize text-[var(--color-text-light)]">{key}</p>
                         <p className="mt-0.5 text-lg font-bold tabular-nums text-fg sm:text-xl">
@@ -2226,6 +2284,7 @@ export default function App() {
           dailyLog={dailyLog}
           todayMacros={macros}
           goals={goals}
+          calorieGoalMode={calorieGoalMode}
           onClose={() => setCalendarOpen(false)}
         />
       )}
@@ -2278,12 +2337,20 @@ export default function App() {
                           if (tw != null) {
                             setWeightGoal(tw);
                           }
+                          if (result.calorieGoalMode != null) {
+                            setCalorieGoalMode(normalizeCalorieGoalMode(result.calorieGoalMode));
+                          }
                           const parts = ['Daily goals updated via AI.'];
                           if (cw != null) {
                             parts.push(`Logged current weight (${formatMacroAmount(cw)} lb).`);
                           }
                           if (tw != null) {
                             parts.push(`Set goal weight (${formatMacroAmount(tw)} lb).`);
+                          }
+                          if (result.calorieGoalMode != null) {
+                            parts.push(
+                              `Calorie goal: ${calorieGoalModeLabel(normalizeCalorieGoalMode(result.calorieGoalMode))}.`,
+                            );
                           }
                           toast.success(parts.join(' '));
                         } catch (error) {
@@ -2299,10 +2366,33 @@ export default function App() {
                   </>
                 )}
               </div>
+              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                <p className="mb-2 text-sm font-semibold text-fg brand-font">Calorie goal</p>
+                <p className="mb-3 text-xs leading-snug text-[var(--color-text-light)]">
+                  Controls how calorie progress is colored: stay under when losing, hit target when gaining,
+                  or stay near goal when maintaining.
+                </p>
+                <div className="inline-flex w-full rounded-full bg-[var(--color-surface)] p-0.5">
+                  {(['lose', 'maintain', 'gain'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setCalorieGoalMode(mode)}
+                      className={`min-w-0 flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:text-sm ${
+                        calorieGoalMode === mode
+                          ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                          : 'text-[var(--color-text-light)] hover:text-fg'
+                      }`}
+                    >
+                      {calorieGoalModeLabel(mode)}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {Object.keys(goals).map((key) => (
                 <div key={key} className="flex items-center gap-4">
-                  <label htmlFor={`goal-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
-                    {key}
+                  <label htmlFor={`goal-${key}`} className="w-24 text-[var(--color-text-light)]">
+                    {macroGoalFieldLabel(key as MacroKey)}
                   </label>
                   <input
                     id={`goal-${key}`}
@@ -2457,6 +2547,27 @@ export default function App() {
         showSocialOnOverview={showSocialOnOverview}
         onShowSocialOnOverviewChange={setShowSocialOnOverview}
       />
+
+      {coachOpen ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="AI Coach"
+          onClick={() => setCoachOpen(false)}
+        >
+          <div
+            className="flex h-[min(92dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-[var(--color-accent)]/20 bg-[var(--color-bg-dark)] shadow-2xl accent-glow"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <AiChatScreen
+              layout="modal"
+              coachInputs={aiCoachInputs}
+              onClose={() => setCoachOpen(false)}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
     </MacroCloudSyncProvider>
   );

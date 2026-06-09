@@ -1,4 +1,5 @@
 import {AlertTriangle} from 'lucide-react';
+import {calorieGoalModeLabel} from '../macroProgress.ts';
 import type {MacroDataBundle} from './macroTypes.ts';
 
 export type MacroSyncConflictInfo = {
@@ -16,6 +17,7 @@ export type MacroBundleSummary = {
   todayCalories: number;
   goalCalories: number;
   weightGoal: number;
+  calorieGoalMode: string;
 };
 
 export function summarizeMacroBundle(bundle: MacroDataBundle): MacroBundleSummary {
@@ -27,6 +29,7 @@ export function summarizeMacroBundle(bundle: MacroDataBundle): MacroBundleSummar
     todayCalories: bundle.macros.calories,
     goalCalories: bundle.goals.calories,
     weightGoal: bundle.weightGoal,
+    calorieGoalMode: calorieGoalModeLabel(bundle.calorieGoalMode),
   };
 }
 
@@ -71,6 +74,7 @@ function SummaryCard({
         <li>
           Today: {summary.todayCalories} / {summary.goalCalories} cal
         </li>
+        <li>Calorie goal: {summary.calorieGoalMode}</li>
         {summary.weightGoal > 0 ? <li>Weight goal: {summary.weightGoal}</li> : null}
         {summary.weightEntries > 0 ? (
           <li>

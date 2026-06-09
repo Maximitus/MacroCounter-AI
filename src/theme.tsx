@@ -69,7 +69,27 @@ export const ACCENT_PRESETS: readonly AccentPreset[] = [
     lightAccent: '#e11d48',
     lightHover: '#be123c',
   },
+  {
+    id: 'rainbow',
+    label: 'Rainbow',
+    darkAccent: '#a855f7',
+    darkHover: '#9333ea',
+    lightAccent: '#7c3aed',
+    lightHover: '#6d28d9',
+  },
 ];
+
+export const RAINBOW_ACCENT_GRADIENT =
+  'linear-gradient(135deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899)';
+
+export function isRainbowAccent(id: string): boolean {
+  return id === 'rainbow';
+}
+
+export function accentSwatchBackground(preset: AccentPreset, theme: Theme): string {
+  if (isRainbowAccent(preset.id)) return RAINBOW_ACCENT_GRADIENT;
+  return theme === 'light' ? preset.lightAccent : preset.darkAccent;
+}
 
 export function getAccentPreset(id: string): AccentPreset {
   return ACCENT_PRESETS.find((p) => p.id === id) ?? ACCENT_PRESETS[0];
@@ -100,10 +120,17 @@ export function applyDomTheme(theme: Theme) {
 }
 
 export function applyAccentCssVars(theme: Theme, accentId: string) {
+  const root = document.documentElement;
+  if (isRainbowAccent(accentId)) {
+    root.dataset.accent = 'rainbow';
+    root.style.removeProperty('--color-accent');
+    root.style.removeProperty('--color-accent-hover');
+    return;
+  }
+  delete root.dataset.accent;
   const p = getAccentPreset(accentId);
   const accent = theme === 'light' ? p.lightAccent : p.darkAccent;
   const hover = theme === 'light' ? p.lightHover : p.darkHover;
-  const root = document.documentElement;
   root.style.setProperty('--color-accent', accent);
   root.style.setProperty('--color-accent-hover', hover);
 }

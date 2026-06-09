@@ -1,7 +1,7 @@
 import {FriendsList} from './FriendsList.tsx';
 import {useSocial} from './SocialContext.tsx';
 
-export function SocialOverviewSection({onOpenSocial}: {onOpenSocial: () => void}) {
+export function SocialOverviewSection({onOpenProfile}: {onOpenProfile: () => void}) {
   const {enabled, profile} = useSocial();
 
   if (!enabled) {
@@ -21,11 +21,11 @@ export function SocialOverviewSection({onOpenSocial}: {onOpenSocial: () => void}
         <h2 className="text-xl font-semibold text-fg brand-font">Friends & streaks</h2>
         <button
           type="button"
-          onClick={onOpenSocial}
+          onClick={onOpenProfile}
           className="max-w-[10rem] truncate text-sm font-medium text-fg hover:underline"
-          title={profile?.displayName ?? 'Open Social'}
+          title={profile?.displayName ?? 'Open profile'}
         >
-          {profile?.displayName ?? 'Social'}
+          {profile?.displayName ?? 'Profile'}
         </button>
       </div>
       <FriendsList />

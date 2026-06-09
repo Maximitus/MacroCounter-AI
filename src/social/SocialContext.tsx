@@ -21,9 +21,22 @@ import {
   subscribeFriends,
   subscribeMacroSocial,
   subscribeUserProfile,
+  updateBodyWeightLb,
   updateDisplayName,
+  updateGender,
+  updateHeightCm,
+  updateHeightUnit,
+  updateWeightUnit,
 } from './socialRepository.ts';
-import type {FriendEntry, FriendWithStreak, MacroSocialPresence, UserProfile} from './socialTypes.ts';
+import type {
+  FriendEntry,
+  FriendWithStreak,
+  MacroSocialPresence,
+  ProfileGender,
+  ProfileHeightUnit,
+  ProfileWeightUnit,
+  UserProfile,
+} from './socialTypes.ts';
 
 type SocialContextValue = {
   enabled: boolean;
@@ -31,6 +44,11 @@ type SocialContextValue = {
   profileLoading: boolean;
   friends: FriendWithStreak[];
   saveDisplayName: (name: string) => Promise<void>;
+  saveGender: (gender: ProfileGender) => Promise<void>;
+  saveBodyWeightLb: (bodyWeightLb: number) => Promise<void>;
+  saveHeightCm: (heightCm: number) => Promise<void>;
+  saveWeightUnit: (weightUnit: ProfileWeightUnit) => Promise<void>;
+  saveHeightUnit: (heightUnit: ProfileHeightUnit) => Promise<void>;
   addFriendByCode: (code: string) => Promise<void>;
   removeFriend: (friendUid: string) => Promise<void>;
   inviteUrl: string;
@@ -175,6 +193,46 @@ export function SocialProvider({children}: {children: ReactNode}) {
     [user],
   );
 
+  const saveGender = useCallback(
+    async (gender: ProfileGender) => {
+      if (!user) throw new Error('Sign in first');
+      await updateGender(user.uid, gender);
+    },
+    [user],
+  );
+
+  const saveBodyWeightLb = useCallback(
+    async (bodyWeightLb: number) => {
+      if (!user) throw new Error('Sign in first');
+      await updateBodyWeightLb(user.uid, bodyWeightLb);
+    },
+    [user],
+  );
+
+  const saveHeightCm = useCallback(
+    async (heightCm: number) => {
+      if (!user) throw new Error('Sign in first');
+      await updateHeightCm(user.uid, heightCm);
+    },
+    [user],
+  );
+
+  const saveWeightUnit = useCallback(
+    async (weightUnit: ProfileWeightUnit) => {
+      if (!user) throw new Error('Sign in first');
+      await updateWeightUnit(user.uid, weightUnit);
+    },
+    [user],
+  );
+
+  const saveHeightUnit = useCallback(
+    async (heightUnit: ProfileHeightUnit) => {
+      if (!user) throw new Error('Sign in first');
+      await updateHeightUnit(user.uid, heightUnit);
+    },
+    [user],
+  );
+
   const friendsWithStreak: FriendWithStreak[] = useMemo(
     () =>
       friends.map((f) => ({
@@ -193,6 +251,11 @@ export function SocialProvider({children}: {children: ReactNode}) {
       profileLoading,
       friends: friendsWithStreak,
       saveDisplayName,
+      saveGender,
+      saveBodyWeightLb,
+      saveHeightCm,
+      saveWeightUnit,
+      saveHeightUnit,
       addFriendByCode,
       removeFriend,
       inviteUrl,
@@ -203,6 +266,11 @@ export function SocialProvider({children}: {children: ReactNode}) {
       profileLoading,
       friendsWithStreak,
       saveDisplayName,
+      saveGender,
+      saveBodyWeightLb,
+      saveHeightCm,
+      saveWeightUnit,
+      saveHeightUnit,
       addFriendByCode,
       removeFriend,
       inviteUrl,

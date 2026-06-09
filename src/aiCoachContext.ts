@@ -1,5 +1,6 @@
 import {calorieGoalModeLabel} from './macroProgress.ts';
 import type {CalorieGoalMode, MacroTotals} from './macroData/macroTypes.ts';
+import {buildProfileAiBlock, type ProfileAiSnapshot} from './social/profileAiContext.ts';
 
 export type NutritionCoachMeal = {
   name: string;
@@ -18,6 +19,7 @@ export type NutritionCoachInputs = {
   todayTotals: MacroTotals;
   todayMeals: NutritionCoachMeal[];
   recentDailyTotals: NutritionCoachDayTotals[];
+  profile?: ProfileAiSnapshot | null;
 };
 
 function formatMacroLine(m: MacroTotals): string {
@@ -90,6 +92,11 @@ Keep replies concise and actionable unless the user asks for detail.`);
       .map((day) => `  - ${day.date}: ${formatMacroLine(day.macros)}`)
       .join('\n');
     sections.push(`\n**Recent prior days (daily totals, newest first)**\n${lines}`);
+  }
+
+  const profileBlock = buildProfileAiBlock(inputs.profile);
+  if (profileBlock) {
+    sections.push(`\n${profileBlock}`);
   }
 
   return sections.join('\n');

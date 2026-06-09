@@ -21,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="/terms" element={<Navigate to="/?legal=open" replace />} />
                 <Route path="/settings" element={<Navigate to="/?open=settings" replace />} />
                 <Route path="/social" element={<Navigate to="/?open=social" replace />} />
+                <Route path="/profile" element={<Navigate to="/?open=profile" replace />} />
                 <Route path="/*" element={<App />} />
               </Routes>
             </DisclaimerGate>

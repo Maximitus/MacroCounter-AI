@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {ChevronDown, Moon, Sun, X} from 'lucide-react';
 import {AccountSection} from './auth/AccountSection.tsx';
 import {TermsOfUseContent} from './TermsOfUseContent.tsx';
-import {ACCENT_PRESETS, useTheme} from './theme.tsx';
+import {ACCENT_PRESETS, accentSwatchBackground, useTheme} from './theme.tsx';
 
 export function SettingsModal({
   open,
@@ -109,7 +109,7 @@ export function SettingsModal({
                 <p className="mb-2 text-xs text-[#9ca3af]">Accent color</p>
                 <div className="flex flex-wrap gap-2">
                   {ACCENT_PRESETS.map((preset) => {
-                    const swatch = theme === 'light' ? preset.lightAccent : preset.darkAccent;
+                    const swatch = accentSwatchBackground(preset, theme);
                     const selected = accentId === preset.id;
                     return (
                       <button
@@ -127,7 +127,11 @@ export function SettingsModal({
                       >
                         <span
                           className="h-8 w-8 shrink-0 rounded-full shadow-inner"
-                          style={{backgroundColor: swatch}}
+                          style={
+                            preset.id === 'rainbow'
+                              ? {background: swatch}
+                              : {backgroundColor: swatch}
+                          }
                         />
                         <span className="text-center text-[10px] leading-tight text-[#9ca3af]">
                           {preset.label}

@@ -151,6 +151,14 @@ export function promptSnackFromIngredients(args: {
   ].join('\n');
 }
 
+/** Nutrition coach chat when the user attaches a PDF or image. */
+export function promptNutritionCoachChatWithAttachment(userMessage: string): string {
+  const trimmed = userMessage.trim();
+  return trimmed
+    ? `${trimmed}\n\n[The user also attached a PDF or image (e.g. bloodwork, body composition scan, nutrition label, or meal photo) — use it as context when answering.]`
+    : '[The user attached a PDF or image (e.g. bloodwork, body composition, or nutrition label) — analyze it and respond with practical nutrition guidance. You are not a doctor.]';
+}
+
 /** Daily macro goal suggestions from free-form user notes. */
 export function promptDailyMacroGoals(userNotes: string): string {
   const notes = JSON.stringify(userNotes);

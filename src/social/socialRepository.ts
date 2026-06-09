@@ -10,7 +10,14 @@ import {
 } from 'firebase/firestore';
 import {getFirebaseDb} from '../firebase.ts';
 import {generateFriendCode, normalizeFriendCode} from './friendCode.ts';
-import type {FriendEntry, MacroSocialPresence, UserProfile} from './socialTypes.ts';
+import type {
+  FriendEntry,
+  MacroSocialPresence,
+  ProfileGender,
+  ProfileHeightUnit,
+  ProfileWeightUnit,
+  UserProfile,
+} from './socialTypes.ts';
 
 function profileRef(uid: string) {
   return doc(getFirebaseDb(), 'users', uid, 'profile', 'main');
@@ -86,6 +93,46 @@ export async function updateDisplayName(uid: string, displayName: string): Promi
   await setDoc(
     profileRef(uid),
     {displayName: trimmed, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateGender(uid: string, gender: ProfileGender): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {gender, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateBodyWeightLb(uid: string, bodyWeightLb: number): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {bodyWeightLb: Math.round(bodyWeightLb * 10) / 10, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateHeightCm(uid: string, heightCm: number): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {heightCm: Math.round(heightCm * 10) / 10, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateWeightUnit(uid: string, weightUnit: ProfileWeightUnit): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {weightUnit, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateHeightUnit(uid: string, heightUnit: ProfileHeightUnit): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {heightUnit, updatedAt: serverTimestamp()},
     {merge: true},
   );
 }

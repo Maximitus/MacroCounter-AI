@@ -9,6 +9,7 @@ export function SubAppHeader({
   backTo,
   backLabel = 'Back',
   backIcon = 'arrow',
+  headerLeft,
   headerRight,
   flush = false,
 }: {
@@ -18,6 +19,7 @@ export function SubAppHeader({
   backTo?: string;
   backLabel?: string;
   backIcon?: 'arrow' | 'close';
+  headerLeft?: ReactNode;
   headerRight?: ReactNode;
   flush?: boolean;
 }) {
@@ -30,19 +32,25 @@ export function SubAppHeader({
       <ArrowLeft className="h-6 w-6" aria-hidden />
     );
 
+  const leftSlot = onBack ? (
+    <button type="button" onClick={onBack} className={backClassName} aria-label={backLabel}>
+      {backContent}
+    </button>
+  ) : backTo !== undefined ? (
+    <Link to={backTo} className={backClassName} aria-label={backLabel}>
+      {backContent}
+    </Link>
+  ) : headerLeft ? (
+    <div className="flex h-11 min-w-11 shrink-0 items-center justify-start">{headerLeft}</div>
+  ) : (
+    <div className="h-11 w-11 shrink-0" aria-hidden />
+  );
+
   return (
     <header
       className={`flex shrink-0 items-center gap-2 border-b border-[var(--color-accent)]/20 bg-[var(--color-chrome-bar)] px-2 py-2.5 shadow-md md:px-4 ${flush ? 'mb-0' : 'mb-5'}`}
     >
-      {onBack ? (
-        <button type="button" onClick={onBack} className={backClassName} aria-label={backLabel}>
-          {backContent}
-        </button>
-      ) : (
-        <Link to={backTo ?? '/'} className={backClassName} aria-label={backLabel}>
-          {backContent}
-        </Link>
-      )}
+      {leftSlot}
       <div className="min-w-0 flex-1 text-center">
         <h1 className="truncate text-xl font-semibold leading-tight tracking-tight text-fg brand-font sm:text-2xl">
           {title}

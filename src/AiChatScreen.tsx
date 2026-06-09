@@ -4,13 +4,25 @@
  */
 
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Loader2, Send, Sparkles, Trash2} from 'lucide-react';
+import {Loader2, Plus, Send, Sparkles, Trash2, X} from 'lucide-react';
 import {SubAppHeader} from './SubAppHeader.tsx';
-import {generateChat} from './geminiBridge';
+import {generateChat, type GeminiPart} from './geminiBridge';
 import {buildNutritionCoachSystemInstruction, type NutritionCoachInputs} from './aiCoachContext';
-import {LabeledActionButton} from './DropdownActionButton.tsx';
+import {promptNutritionCoachChatWithAttachment} from './aiPrompts';
+import {
+  AI_ATTACHMENT_ACCEPT,
+  attachmentSummaryLabel,
+  fileToAiAttachment,
+  geminiInlinePart,
+  revokeAiAttachmentPreview,
+  type AiAttachment,
+} from './aiAttachments.ts';
+import {AiAttachmentChip} from './AiAttachmentChip.tsx';
 
 const STORAGE_MESSAGES = 'macrocounter_ai_chat_messages_v1';
+
+const COMPOSER_HINT =
+  'Ask about meals and macros. Attach a photo or PDF (bloodwork, body composition, nutrition labels) for context. Not medical advice.';
 
 export type AiChatMessage = {
   id: string;
@@ -58,7 +70,7 @@ export function AiChatScreen({
   title = 'Coach',
   subtitle,
   suggestions = SUGGESTIONS,
-  emptyHint = 'Ask about meals, macros, or daily goals. Not medical advice.',
+  emptyHint = 'Ask about meals, macros, or daily goals.',
   layout = 'fullscreen',
 }: {
   coachInputs: NutritionCoachInputs;
@@ -72,11 +84,13 @@ export function AiChatScreen({
 }) {
   const [messages, setMessages] = useState<AiChatMessage[]>(() => loadMessages(storageKey));
   const [input, setInput] = useState('');
+  const [attachment, setAttachment] = useState<AiAttachment | null>(null);
   const [sending, setSending] = useState(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     saveMessages(storageKey, messages);
@@ -85,6 +99,13 @@ export function AiChatScreen({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({behavior: 'smooth'});
   }, [messages, sending]);
+
+  useEffect(
+    () => () => {
+      revokeAiAttachmentPreview(attachment);
+    },
+    [attachment],
+  );
 
   const clearChat = useCallback(() => {
     if (!confirm('Clear all messages in this chat?')) return;
@@ -96,16 +117,40 @@ export function AiChatScreen({
     }
   }, [storageKey]);
 
+  const attachFile = useCallback(async (file: File) => {
+    try {
+      const next = await fileToAiAttachment(file);
+      setAttachment((prev) => {
+        revokeAiAttachmentPreview(prev);
+        return next;
+      });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not attach file.');
+    }
+  }, []);
+
+  const clearAttachment = useCallback(() => {
+    setAttachment((prev) => {
+      revokeAiAttachmentPreview(prev);
+      return null;
+    });
+  }, []);
+
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && !attachment) || sending) return;
+
+    const attachmentNote = attachment ? `\n[Attached: ${attachmentSummaryLabel(attachment)}]` : '';
+    const displayText = trimmed ? `${trimmed}${attachmentNote}` : attachmentNote.trim();
 
     const userMsg: AiChatMessage = {
       id: `${Date.now()}-u`,
       role: 'user',
-      text: trimmed,
+      text: displayText,
     };
     setInput('');
+    const pendingAttachment = attachment;
+    setAttachment(null);
     setSending(true);
 
     const MAX_MESSAGES = 24;
@@ -115,10 +160,25 @@ export function AiChatScreen({
     setMessages(nextMessages);
 
     const systemInstruction = buildNutritionCoachSystemInstruction(coachInputs);
-    const contents = priorForApi.map((m) => ({
-      role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model',
-      parts: [{text: m.text}],
-    }));
+    const contents: {role: 'user' | 'model'; parts: GeminiPart[]}[] = [];
+    for (let i = 0; i < priorForApi.length; i++) {
+      const m = priorForApi[i];
+      const isLastUser = i === priorForApi.length - 1 && m.role === 'user';
+      if (isLastUser && pendingAttachment) {
+        contents.push({
+          role: 'user',
+          parts: [
+            {text: promptNutritionCoachChatWithAttachment(trimmed)},
+            geminiInlinePart(pendingAttachment),
+          ],
+        });
+      } else {
+        contents.push({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{text: m.text}],
+        });
+      }
+    }
 
     try {
       const replyText = await generateChat({
@@ -143,13 +203,14 @@ export function AiChatScreen({
         },
       ]);
     } finally {
+      revokeAiAttachmentPreview(pendingAttachment);
       setSending(false);
       textareaRef.current?.focus();
     }
-  }, [coachInputs, input, sending]);
+  }, [attachment, coachInputs, input, sending]);
 
   const isModal = layout === 'modal';
-  const canSend = !sending && input.trim().length > 0;
+  const canSend = !sending && (input.trim().length > 0 || attachment != null);
 
   return (
     <div
@@ -162,19 +223,42 @@ export function AiChatScreen({
       <SubAppHeader
         title={title}
         subtitle={subtitle ?? undefined}
-        onBack={onClose}
-        backIcon={isModal ? 'close' : 'arrow'}
-        backLabel={isModal ? 'Close' : 'Back to app'}
+        onBack={isModal ? undefined : onClose}
+        backIcon="arrow"
+        backLabel="Back to app"
         flush
+        headerLeft={
+          isModal ? (
+            <button
+              type="button"
+              onClick={clearChat}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+              aria-label="Clear chat"
+            >
+              <Trash2 className="h-5 w-5" aria-hidden />
+            </button>
+          ) : undefined
+        }
         headerRight={
-          <button
-            type="button"
-            onClick={clearChat}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
-            aria-label="Clear chat"
-          >
-            <Trash2 className="h-5 w-5" aria-hidden />
-          </button>
+          isModal ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg transition hover:bg-[var(--color-surface)]"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={clearChat}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
+              aria-label="Clear chat"
+            >
+              <Trash2 className="h-5 w-5" aria-hidden />
+            </button>
+          )
         }
       />
 
@@ -192,8 +276,10 @@ export function AiChatScreen({
               <Sparkles className="h-8 w-8 text-[var(--color-accent)]" aria-hidden />
             </div>
             <h2 className="text-xl font-semibold text-fg">How can I help?</h2>
-            <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--color-text-light)]">{emptyHint}</p>
-            <div className="mt-8 w-full max-w-md space-y-2">
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--color-text-light)]">
+              {COMPOSER_HINT}
+            </p>
+            <div className="mt-6 w-full max-w-md space-y-2">
               {suggestions.map((s) => (
                 <button
                   key={s}
@@ -246,8 +332,31 @@ export function AiChatScreen({
           isModal ? 'pb-3' : 'pb-[max(0.75rem,env(safe-area-inset-bottom))]'
         }`}
       >
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-3xl space-y-2">
+          {attachment ? (
+            <AiAttachmentChip attachment={attachment} onRemove={clearAttachment} />
+          ) : null}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={AI_ATTACHMENT_ACCEPT}
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void attachFile(f);
+            }}
+          />
           <div className="flex items-end gap-2 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-2">
+            <button
+              type="button"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-panel-hover)] hover:text-fg disabled:opacity-60"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label="Attach photo or PDF"
+            >
+              <Plus className="h-5 w-5" aria-hidden />
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -264,23 +373,23 @@ export function AiChatScreen({
                 }
               }}
               rows={1}
-              placeholder="Ask about meals, macros, or goals…"
+              placeholder="Message…"
               disabled={sending}
-              className="max-h-[120px] min-h-[44px] w-full flex-1 resize-none bg-transparent py-2.5 text-[15px] text-fg placeholder:text-[var(--color-text-light)] outline-none disabled:opacity-60"
+              className="max-h-[120px] min-h-[40px] w-full min-w-0 flex-1 resize-none bg-transparent py-2 text-[15px] text-fg placeholder:text-[var(--color-text-light)] outline-none disabled:opacity-60"
             />
-            <LabeledActionButton
-              icon={
-                sending ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-                ) : (
-                  <Send className="h-4 w-4 shrink-0" aria-hidden />
-                )
-              }
-              label="Send"
-              disabled={!canSend}
-              className="!flex-none shrink-0"
+            <button
+              type="button"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-accent)] transition hover:bg-[var(--color-panel-hover)] disabled:opacity-40 disabled:text-[var(--color-text-light)]"
               onClick={() => void send()}
-            />
+              disabled={!canSend}
+              aria-label="Send"
+            >
+              {sending ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+              ) : (
+                <Send className="h-5 w-5" aria-hidden />
+              )}
+            </button>
           </div>
         </div>
       </div>

@@ -13,7 +13,6 @@ import {
   MessageSquare,
   MoreVertical,
   X,
-  Images,
   CalendarDays,
   ChevronUp,
   ChevronDown,
@@ -23,7 +22,7 @@ import {
   Scale,
   Plus,
   Sparkles,
-  Users,
+  User,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -67,8 +66,12 @@ import {MacroSyncConflictModal} from './macroData/MacroSyncConflictModal.tsx';
 import {SettingsModal} from './SettingsModal.tsx';
 import {SettingsMenu} from './SettingsMenu.tsx';
 import {LabeledActionButton} from './DropdownActionButton.tsx';
-import {SocialModal} from './social/SocialModal.tsx';
+import {ProfileModal} from './social/SocialModal.tsx';
 import {SocialOverviewSection} from './social/SocialOverviewSection.tsx';
+import {profileAiSnapshot} from './social/profileAiContext.ts';
+import {useApplyProfileBodyWeight} from './social/useApplyProfileBodyWeight.ts';
+import {resolveProfileWeightUnit} from './social/profileBody.ts';
+import {useSocial} from './social/SocialContext.tsx';
 import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
 import {
   ceilToOneDecimal,
@@ -80,6 +83,67 @@ import {
 } from './macroUtils';
 
 const MACRO_ORDER = ['calories', 'protein', 'carbs', 'fat'] as const;
+type ManualMacroKey = (typeof MACRO_ORDER)[number];
+
+const MANUAL_MACRO_LABELS: Record<ManualMacroKey, string> = {
+  calories: 'Calories',
+  protein: 'Protein',
+  carbs: 'Carbs',
+  fat: 'Fat',
+};
+
+const MANUAL_MACRO_UNITS: Record<ManualMacroKey, string> = {
+  calories: 'kcal',
+  protein: 'g',
+  carbs: 'g',
+  fat: 'g',
+};
+
+function MacroInputGrid({
+  idPrefix,
+  valueForKey,
+  onChange,
+  onFocus,
+  onBlur,
+}: {
+  idPrefix: string;
+  valueForKey: (key: ManualMacroKey) => string;
+  onChange: (key: ManualMacroKey, raw: string) => void;
+  onFocus?: (key: ManualMacroKey) => void;
+  onBlur?: (key: ManualMacroKey) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {MACRO_ORDER.map((key) => (
+        <div key={key}>
+          <label
+            htmlFor={`${idPrefix}-${key}`}
+            className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
+          >
+            {MANUAL_MACRO_LABELS[key]}
+          </label>
+          <div className="flex items-center rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]">
+            <input
+              id={`${idPrefix}-${key}`}
+              name={`${idPrefix}_${key}`}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={valueForKey(key)}
+              onFocus={() => onFocus?.(key)}
+              onBlur={() => onBlur?.(key)}
+              onChange={(e) => onChange(key, e.target.value)}
+              className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm tabular-nums text-fg outline-none"
+            />
+            <span className="shrink-0 pr-2.5 text-xs text-[var(--color-text-light)]">
+              {MANUAL_MACRO_UNITS[key]}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function MacroProgressWheel({
   macroKey,
@@ -363,17 +427,17 @@ function WeightSection({
   weightLog,
   weightGoal,
   onLogWeight,
+  weightUnit,
+  onWeightUnitChange,
 }: {
   weightLog: Record<string, number>;
   weightGoal: number;
   onLogWeight: (weight: number) => void;
+  weightUnit: WeightUnit;
+  onWeightUnitChange: (unit: WeightUnit) => void;
 }) {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [logDraft, setLogDraft] = useState('');
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>(() => {
-    const saved = localStorage.getItem('weightUnit');
-    return saved === 'kg' ? 'kg' : 'lb';
-  });
 
   useEffect(() => {
     localStorage.setItem('weightUnit', weightUnit);
@@ -414,16 +478,14 @@ function WeightSection({
   };
 
   const toggleWeightUnit = () => {
-    setWeightUnit((u) => {
-      const next: WeightUnit = u === 'lb' ? 'kg' : 'lb';
-      if (logDraft) {
-        const val = parseMacroAmountInput(logDraft);
-        if (val > 0) {
-          setLogDraft(String(weightFromLb(weightToLb(val, u), next)));
-        }
+    const next: WeightUnit = weightUnit === 'lb' ? 'kg' : 'lb';
+    if (logDraft) {
+      const val = parseMacroAmountInput(logDraft);
+      if (val > 0) {
+        setLogDraft(String(weightFromLb(weightToLb(val, weightUnit), next)));
       }
-      return next;
-    });
+    }
+    onWeightUnitChange(next);
   };
 
   useEffect(() => {
@@ -745,9 +807,24 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const {user, loading: authLoading} = useAuth();
+  const {
+    enabled: socialEnabled,
+    profile: socialProfile,
+    saveBodyWeightLb,
+    saveWeightUnit,
+  } = useSocial();
+  const lastLocalWeightPushRef = useRef<number | null>(null);
+  const [guestWeightUnit, setGuestWeightUnit] = useState<WeightUnit>(() => {
+    const saved = localStorage.getItem('weightUnit');
+    return saved === 'kg' ? 'kg' : 'lb';
+  });
+  const profileWeightUnit = (
+    socialEnabled ? resolveProfileWeightUnit(socialProfile?.weightUnit) : guestWeightUnit
+  ) as WeightUnit;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTermsOpen, setSettingsTermsOpen] = useState(false);
-  const [socialOpen, setSocialOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<'profile' | 'social'>('profile');
   const [coachOpen, setCoachOpen] = useState(false);
   const [showSocialOnOverview, setShowSocialOnOverview] = useState(loadShowSocialOnOverview);
   const [showWeightSection, setShowWeightSection] = useState(loadShowWeightSection);
@@ -888,6 +965,7 @@ export default function App() {
   });
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
+  useApplyProfileBodyWeight(socialEnabled, socialProfile, getTodayKey, setWeightLog, lastLocalWeightPushRef);
 
   const aiCoachInputs = useMemo(
     () => ({
@@ -902,8 +980,9 @@ export default function App() {
         macros: meal.macros,
       })),
       recentDailyTotals: recentDailyTotalsFromLog(dailyLog, 7, getTodayKey()),
+      profile: profileAiSnapshot(socialProfile),
     }),
-    [goals, calorieGoalMode, macros, history, dailyLog],
+    [goals, calorieGoalMode, macros, history, dailyLog, socialProfile],
   );
 
   useEffect(() => {
@@ -929,8 +1008,9 @@ export default function App() {
       params.delete('open');
       changed = true;
     }
-    if (params.get('open') === 'social') {
-      setSocialOpen(true);
+    if (params.get('open') === 'profile' || params.get('open') === 'social') {
+      setProfileInitialTab(params.get('open') === 'social' ? 'social' : 'profile');
+      setProfileOpen(true);
       params.delete('open');
       changed = true;
     }
@@ -1037,7 +1117,6 @@ export default function App() {
     snackOpen,
   ]);
 
-  type ManualMacroKey = keyof typeof manualMacros;
   const macroInputValue = (key: ManualMacroKey) =>
     macroFieldDraft[key] !== undefined ? macroFieldDraft[key]! : String(manualMacros[key]);
 
@@ -1396,11 +1475,14 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setSocialOpen(true)}
+            onClick={() => {
+              setProfileInitialTab('profile');
+              setProfileOpen(true);
+            }}
             className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
-            aria-label="Open Social"
+            aria-label="Open profile"
           >
-            <Users className="h-5 w-5" aria-hidden />
+            <User className="h-5 w-5" aria-hidden />
           </button>
           <SettingsMenu onOpen={() => setSettingsOpen(true)} />
         </div>
@@ -1505,15 +1587,34 @@ export default function App() {
         </section>
 
         {showSocialOnOverview ? (
-          <SocialOverviewSection onOpenSocial={() => setSocialOpen(true)} />
+          <SocialOverviewSection
+            onOpenProfile={() => {
+              setProfileInitialTab('social');
+              setProfileOpen(true);
+            }}
+          />
         ) : null}
 
         {showWeightSection ? (
           <WeightSection
             weightLog={weightLog}
             weightGoal={weightGoal}
+            weightUnit={profileWeightUnit}
+            onWeightUnitChange={(unit) => {
+              if (socialEnabled) {
+                void saveWeightUnit(unit).catch((e) =>
+                  console.error('Could not save weight unit', e),
+                );
+              } else {
+                setGuestWeightUnit(unit);
+              }
+            }}
             onLogWeight={(w) => {
-              setWeightLog((prev) => ({ ...prev, [getTodayKey()]: w }));
+              lastLocalWeightPushRef.current = w;
+              setWeightLog((prev) => ({...prev, [getTodayKey()]: w}));
+              if (socialEnabled && user) {
+                void saveBodyWeightLb(w).catch((e) => console.error('Could not sync weight to profile', e));
+              }
             }}
           />
         ) : null}
@@ -1606,23 +1707,25 @@ export default function App() {
                 disabled={loading}
                 className="box-border w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)] disabled:opacity-60"
               />
-              <button
-                type="button"
-                className="w-full rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-                onClick={() => void handleTextAnalysis()}
-                disabled={loading || !textDescription.trim()}
-              >
-                Analyze
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)] disabled:opacity-60"
-                onClick={() => galleryInputRef.current?.click()}
-                disabled={loading}
-              >
-                <Images className="h-5 w-5 text-[var(--color-text-light)]" aria-hidden />
-                Choose from photos
-              </button>
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  className="flex h-12 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-panel-hover)] hover:text-fg disabled:opacity-60"
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={loading}
+                  aria-label="Choose from photos"
+                >
+                  <Plus className="h-5 w-5" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                  onClick={() => void handleTextAnalysis()}
+                  disabled={loading || !textDescription.trim()}
+                >
+                  Analyze
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1757,29 +1860,17 @@ export default function App() {
                   ))}
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {Object.keys(manualMacros).map((key) => (
-                    <div key={key} className="flex items-center gap-4">
-                      <label htmlFor={`manual-macro-${key}`} className="w-24 capitalize text-[var(--color-text-light)]">
-                        {key}
-                      </label>
-                      <input
-                        id={`manual-macro-${key}`}
-                        name={`manual_macro_${key}`}
-                        type="text"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        value={macroInputValue(key as ManualMacroKey)}
-                        onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
-                        onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
-                        onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
-                        className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)]"
-                      />
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <MacroInputGrid
+                    idPrefix="manual-macro"
+                    valueForKey={macroInputValue}
+                    onChange={handleMacroInputChange}
+                    onFocus={handleMacroInputFocus}
+                    onBlur={handleMacroInputBlur}
+                  />
                   <button
                     type="button"
-                    className="w-full rounded-full bg-[var(--color-accent)] py-4 font-medium text-white transition hover:bg-[var(--color-accent-hover)]"
+                    className="w-full rounded-full bg-[var(--color-accent)] py-3 text-sm font-medium text-white transition hover:bg-[var(--color-accent-hover)]"
                     onClick={() => {
                       addMeal('Manual Entry', manualMacros);
                       setManualEntryOpen(false);
@@ -1814,22 +1905,13 @@ export default function App() {
                   onChange={(e) => setFavName(e.target.value)}
                   className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
                 />
-                {Object.keys(manualMacros).map((key) => (
-                  <input
-                    key={key}
-                    id={`favorite-manual-macro-${key}`}
-                    name={`favorite_manual_macro_${key}`}
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    placeholder={key}
-                    value={macroInputValue(key as ManualMacroKey)}
-                    onFocus={() => handleMacroInputFocus(key as ManualMacroKey)}
-                    onBlur={() => handleMacroInputBlur(key as ManualMacroKey)}
-                    onChange={(e) => handleMacroInputChange(key as ManualMacroKey, e.target.value)}
-                    className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
-                  />
-                ))}
+                <MacroInputGrid
+                  idPrefix="favorite-manual-macro"
+                  valueForKey={macroInputValue}
+                  onChange={handleMacroInputChange}
+                  onFocus={handleMacroInputFocus}
+                  onBlur={handleMacroInputBlur}
+                />
                 <button className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full" onClick={() => saveFavorite(favName, manualMacros)}>Save</button>
               </div>
             )}
@@ -2189,28 +2271,11 @@ export default function App() {
                 onChange={(e) => setEditMealName(e.target.value)}
                 className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
               />
-              {Object.keys(editMealMacros).map((key) => (
-                <div key={key} className="flex items-center gap-4">
-                  <label htmlFor={`edit-meal-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
-                    {key}
-                  </label>
-                  <input
-                    id={`edit-meal-macro-${key}`}
-                    name={`edit_meal_macro_${key}`}
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={String(editMealMacros[key as keyof typeof editMealMacros])}
-                    onChange={(e) =>
-                      handleEditMealMacroChange(
-                        key as keyof typeof manualMacros,
-                        e.target.value,
-                      )
-                    }
-                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
-                  />
-                </div>
-              ))}
+              <MacroInputGrid
+                idPrefix="edit-meal-macro"
+                valueForKey={(key) => String(editMealMacros[key])}
+                onChange={handleEditMealMacroChange}
+              />
               <button
                 className="w-full rounded-full bg-[var(--color-accent)] py-3 font-medium text-white hover:bg-[var(--color-accent-hover)] transition"
                 onClick={saveEditedMeal}
@@ -2238,28 +2303,11 @@ export default function App() {
                 onChange={(e) => setEditFavoriteName(e.target.value)}
                 className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
               />
-              {Object.keys(editFavoriteMacros).map((key) => (
-                <div key={key} className="flex items-center gap-4">
-                  <label htmlFor={`edit-favorite-macro-${key}`} className="capitalize w-24 text-[var(--color-text-light)]">
-                    {key}
-                  </label>
-                  <input
-                    id={`edit-favorite-macro-${key}`}
-                    name={`edit_favorite_macro_${key}`}
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={String(editFavoriteMacros[key as keyof typeof editFavoriteMacros])}
-                    onChange={(e) =>
-                      handleEditFavoriteMacroChange(
-                        key as keyof typeof manualMacros,
-                        e.target.value,
-                      )
-                    }
-                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 text-fg"
-                  />
-                </div>
-              ))}
+              <MacroInputGrid
+                idPrefix="edit-favorite-macro"
+                valueForKey={(key) => String(editFavoriteMacros[key])}
+                onChange={handleEditFavoriteMacroChange}
+              />
               <button
                 className="w-full rounded-full bg-[var(--color-accent)] py-3 font-medium text-white hover:bg-[var(--color-accent-hover)] transition"
                 onClick={saveEditedFavorite}
@@ -2323,10 +2371,16 @@ export default function App() {
                           const cw = parseOptionalAiWeightLb(result.currentWeightLb);
                           const tw = parseOptionalAiWeightLb(result.targetWeightLb);
                           if (cw != null) {
+                            lastLocalWeightPushRef.current = cw;
                             setWeightLog((prev) => ({
                               ...prev,
                               [getTodayKey()]: cw,
                             }));
+                            if (socialEnabled && user) {
+                              void saveBodyWeightLb(cw).catch((e) =>
+                                console.error('Could not sync weight to profile', e),
+                              );
+                            }
                           }
                           if (tw != null) {
                             setWeightGoal(tw);
@@ -2535,9 +2589,10 @@ export default function App() {
         showWeightSection={showWeightSection}
         onShowWeightSectionChange={setShowWeightSection}
       />
-      <SocialModal
-        open={socialOpen}
-        onClose={() => setSocialOpen(false)}
+      <ProfileModal
+        open={profileOpen}
+        initialTab={profileInitialTab}
+        onClose={() => setProfileOpen(false)}
         showSocialOnOverview={showSocialOnOverview}
         onShowSocialOnOverviewChange={setShowSocialOnOverview}
       />

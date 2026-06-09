@@ -1931,13 +1931,11 @@ export default function App() {
           onClick={() => setAddMealChooserOpen(false)}
         >
           <div
-            className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow"
+            className="glass w-full max-w-sm rounded-2xl border border-[var(--color-accent)]/10 p-4 shadow-lg accent-glow"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-fg brand-font">Add a meal</h2>
-              </div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-fg brand-font">Add a meal</h2>
               <button
                 type="button"
                 className="rounded-full p-1.5 text-[var(--color-text-light)] transition hover:bg-[var(--color-surface)] hover:text-fg"
@@ -1947,54 +1945,50 @@ export default function App() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                className="flex items-center gap-2 rounded-lg border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
                 onClick={() => {
                   setAddMealChooserOpen(false);
                   setDescribeOpen(true);
                 }}
               >
-                <MessageSquare className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
-                <span className="text-sm font-semibold text-fg">Describe</span>
-                <span className="text-xs text-[var(--color-text-light)]">Tell the AI what you ate</span>
+                <MessageSquare className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-medium text-fg">Describe</span>
               </button>
               <button
                 type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                className="flex items-center gap-2 rounded-lg border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
                 onClick={() => {
                   setAddMealChooserOpen(false);
                   openNativeCamera();
                 }}
               >
-                <Camera className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
-                <span className="text-sm font-semibold text-fg">Picture</span>
-                <span className="text-xs text-[var(--color-text-light)]">Snap or upload a photo</span>
+                <Camera className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-medium text-fg">Picture</span>
               </button>
               <button
                 type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                className="flex items-center gap-2 rounded-lg border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
                 onClick={() => {
                   setAddMealChooserOpen(false);
                   setManualEntryOpen(true);
                 }}
               >
-                <ClipboardList className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
-                <span className="text-sm font-semibold text-fg">Manual</span>
-                <span className="text-xs text-[var(--color-text-light)]">Favorites or type macros</span>
+                <ClipboardList className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-medium text-fg">Manual</span>
               </button>
               <button
                 type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] p-5 text-center transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
+                className="flex items-center gap-2 rounded-lg border border-[var(--color-accent)]/15 bg-[var(--color-bg-dark)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-hover)]"
                 onClick={() => {
                   setAddMealChooserOpen(false);
                   openSnackHelper();
                 }}
               >
-                <Sparkles className="h-7 w-7 text-[var(--color-accent)]" aria-hidden />
-                <span className="text-sm font-semibold text-fg">Snack helper</span>
-                <span className="text-xs text-[var(--color-text-light)]">Fits your remaining macros</span>
+                <Sparkles className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
+                <span className="text-sm font-medium text-fg">Snack</span>
               </button>
             </div>
           </div>

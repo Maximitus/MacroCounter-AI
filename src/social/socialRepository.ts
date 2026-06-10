@@ -13,6 +13,7 @@ import {generateFriendCode, normalizeFriendCode} from './friendCode.ts';
 import type {
   FriendEntry,
   MacroSocialPresence,
+  ProfileBodyType,
   ProfileGender,
   ProfileHeightUnit,
   ProfileWeightUnit,
@@ -101,6 +102,14 @@ export async function updateGender(uid: string, gender: ProfileGender): Promise<
   await setDoc(
     profileRef(uid),
     {gender, updatedAt: serverTimestamp()},
+    {merge: true},
+  );
+}
+
+export async function updateBodyType(uid: string, bodyType: ProfileBodyType): Promise<void> {
+  await setDoc(
+    profileRef(uid),
+    {bodyType, updatedAt: serverTimestamp()},
     {merge: true},
   );
 }

@@ -7,7 +7,7 @@ export type MealEntry = {id: string; name: string; macros: MacroTotals};
 
 export type FavoriteEntry = {name: string; macros: MacroTotals};
 
-/** Meal-logging streak state (cheat days, fasting, vacation, meal counts). */
+/** Streak settings (cheat credits) and legacy fields for cloud sync. */
 export type StreakBundle = {
   mealCountByDay: Record<string, number>;
   cheatDays: Record<string, true>;
@@ -30,6 +30,8 @@ export type MacroDataBundle = {
   goals: MacroTotals;
   dailyLog: Record<string, MacroTotals>;
   weightGoal: number;
+  /** ISO date (YYYY-MM-DD) by which the user wants to reach weightGoal; empty if unset. */
+  weightGoalDate: string;
   calorieGoalMode: CalorieGoalMode;
   weightLog: Record<string, number>;
   favorites: FavoriteEntry[];

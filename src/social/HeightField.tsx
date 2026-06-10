@@ -29,7 +29,7 @@ export function HeightField() {
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-fg">Height</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {heightUnit === 'ft_in' ? (
           <>
             <input
@@ -42,7 +42,7 @@ export function HeightField() {
               onChange={(e) => setFeet(e.target.value)}
               placeholder="ft"
               aria-label="Height feet"
-              className="w-16 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+              className="min-w-[2.75rem] flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2 py-1.5 text-center text-sm tabular-nums text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
             />
             <input
               type="number"
@@ -54,7 +54,7 @@ export function HeightField() {
               onChange={(e) => setInches(e.target.value)}
               placeholder="in"
               aria-label="Height inches"
-              className="w-16 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+              className="min-w-[2.75rem] flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2 py-1.5 text-center text-sm tabular-nums text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
             />
           </>
         ) : (
@@ -67,7 +67,7 @@ export function HeightField() {
             onChange={(e) => setCmDraft(e.target.value)}
             placeholder="e.g. 178"
             aria-label="Height centimeters"
-            className="min-w-0 flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+            className="min-w-[3rem] flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2 py-1.5 text-center text-sm tabular-nums text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
           />
         )}
         <ProfileUnitSelect

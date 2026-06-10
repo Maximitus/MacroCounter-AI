@@ -22,6 +22,7 @@ import {
   subscribeMacroSocial,
   subscribeUserProfile,
   updateBodyWeightLb,
+  updateBodyType,
   updateDisplayName,
   updateGender,
   updateHeightCm,
@@ -35,6 +36,7 @@ import type {
   ProfileGender,
   ProfileHeightUnit,
   ProfileWeightUnit,
+  ProfileBodyType,
   UserProfile,
 } from './socialTypes.ts';
 
@@ -45,6 +47,7 @@ type SocialContextValue = {
   friends: FriendWithStreak[];
   saveDisplayName: (name: string) => Promise<void>;
   saveGender: (gender: ProfileGender) => Promise<void>;
+  saveBodyType: (bodyType: ProfileBodyType) => Promise<void>;
   saveBodyWeightLb: (bodyWeightLb: number) => Promise<void>;
   saveHeightCm: (heightCm: number) => Promise<void>;
   saveWeightUnit: (weightUnit: ProfileWeightUnit) => Promise<void>;
@@ -201,6 +204,14 @@ export function SocialProvider({children}: {children: ReactNode}) {
     [user],
   );
 
+  const saveBodyType = useCallback(
+    async (bodyType: ProfileBodyType) => {
+      if (!user) throw new Error('Sign in first');
+      await updateBodyType(user.uid, bodyType);
+    },
+    [user],
+  );
+
   const saveBodyWeightLb = useCallback(
     async (bodyWeightLb: number) => {
       if (!user) throw new Error('Sign in first');
@@ -252,6 +263,7 @@ export function SocialProvider({children}: {children: ReactNode}) {
       friends: friendsWithStreak,
       saveDisplayName,
       saveGender,
+      saveBodyType,
       saveBodyWeightLb,
       saveHeightCm,
       saveWeightUnit,
@@ -267,6 +279,7 @@ export function SocialProvider({children}: {children: ReactNode}) {
       friendsWithStreak,
       saveDisplayName,
       saveGender,
+      saveBodyType,
       saveBodyWeightLb,
       saveHeightCm,
       saveWeightUnit,

@@ -2,9 +2,9 @@ import type {ProfileGender} from './socialTypes.ts';
 import {useSocial} from './SocialContext.tsx';
 import {useProfileSettings} from './ProfileSettingsContext.tsx';
 
-const OPTIONS: {value: ProfileGender; label: string}[] = [
-  {value: 'female', label: 'Female'},
-  {value: 'male', label: 'Male'},
+const OPTIONS: {value: ProfileGender; label: string; symbol?: string}[] = [
+  {value: 'female', label: 'Female', symbol: '♀'},
+  {value: 'male', label: 'Male', symbol: '♂'},
   {value: 'prefer_not_to_say', label: 'Prefer not to say'},
 ];
 
@@ -36,7 +36,16 @@ export function GenderField() {
                   : 'border-[var(--color-accent)]/20 bg-[var(--color-surface)] text-[var(--color-text-light)] hover:bg-[var(--color-panel-hover)] hover:text-fg'
               }`}
             >
-              {option.label}
+              {option.symbol ? (
+                <>
+                  <span className="mr-1 text-sm" aria-hidden>
+                    {option.symbol}
+                  </span>
+                  {option.label}
+                </>
+              ) : (
+                option.label
+              )}
             </button>
           );
         })}

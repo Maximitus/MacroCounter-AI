@@ -1,9 +1,10 @@
-import type {ProfileGender, ProfileHeightUnit, ProfileWeightUnit} from './socialTypes.ts';
+import type {ProfileBodyType, ProfileGender, ProfileHeightUnit, ProfileWeightUnit} from './socialTypes.ts';
 
 /** Firestore `users/{uid}/profile/main` body fields — keep identical in Macro Counter. */
 export const PROFILE_FIELD_BODY_WEIGHT_LB = 'bodyWeightLb';
 export const PROFILE_FIELD_HEIGHT_CM = 'heightCm';
 export const PROFILE_FIELD_GENDER = 'gender';
+export const PROFILE_FIELD_BODY_TYPE = 'bodyType';
 export const PROFILE_FIELD_WEIGHT_UNIT = 'weightUnit';
 export const PROFILE_FIELD_HEIGHT_UNIT = 'heightUnit';
 
@@ -18,9 +19,25 @@ const GENDER_LABELS: Record<ProfileGender, string> = {
   prefer_not_to_say: 'Prefer not to say',
 };
 
+const BODY_TYPE_LABELS: Record<ProfileBodyType, string> = {
+  ectomorph: 'Ectomorph',
+  mesomorph: 'Mesomorph',
+  endomorph: 'Endomorph',
+};
+
+export function normalizeProfileBodyType(raw: unknown): ProfileBodyType | undefined {
+  if (raw === 'ectomorph' || raw === 'mesomorph' || raw === 'endomorph') return raw;
+  return undefined;
+}
+
 export function formatProfileGender(gender: ProfileGender | undefined): string | null {
   if (!gender) return null;
   return GENDER_LABELS[gender];
+}
+
+export function formatProfileBodyType(bodyType: ProfileBodyType | undefined): string | null {
+  if (!bodyType) return null;
+  return BODY_TYPE_LABELS[bodyType];
 }
 
 export function roundBodyWeightLb(lb: number): number {

@@ -1,6 +1,8 @@
 export type ProfileGender = 'female' | 'male' | 'prefer_not_to_say';
 export type ProfileWeightUnit = 'lb' | 'kg';
 export type ProfileHeightUnit = 'ft_in' | 'cm';
+/** Somatotype hint for nutrition personalization — optional. */
+export type ProfileBodyType = 'ectomorph' | 'mesomorph' | 'endomorph';
 
 export type UserProfile = {
   displayName: string;
@@ -10,6 +12,8 @@ export type UserProfile = {
   bodyWeightLb?: number;
   /** Height in centimeters — shared with Workout app. */
   heightCm?: number;
+  /** Somatotype — shared with Workout app when set. */
+  bodyType?: ProfileBodyType;
   /** Display unit for body weight — shared with Workout app. */
   weightUnit?: ProfileWeightUnit;
   /** Display unit for height — shared with Workout app. */

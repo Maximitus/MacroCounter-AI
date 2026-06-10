@@ -123,3 +123,15 @@ h3,
 .scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+
+/* Hide number input spinners — keeps centered text from shifting */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

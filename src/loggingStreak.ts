@@ -1,26 +1,18 @@
+import type {CalorieGoalMode} from './macroData/macroTypes.ts';
 import type {MacroTotals, StreakBundle} from './macroData/macroTypes.ts';
+import {macroGoalMet} from './macroProgress.ts';
 
-export type StreakDayFlags = {
-  cheatDays: Record<string, true>;
-  fastingDays: Record<string, true>;
-  vacationDays: Record<string, true>;
-  vacationMode: boolean;
-};
-
-export type LoggingStreakSnapshot = {
+export type CalorieStreakSnapshot = {
   streakDays: number;
-  /** True when today is included in the streak count. */
   includesToday: boolean;
-  /** True when today has no meals and no protective flags yet. */
   todayAtRisk: boolean;
-  mealsLoggedToday: number;
+  todayCalories: number;
+  calorieGoal: number;
   cheatDaysUsedThisWeek: number;
   cheatDaysPerWeek: number;
-  canUseCheatDayToday: boolean;
-  fastingToday: boolean;
-  vacationToday: boolean;
+  cheatCreditsRemaining: number;
   cheatDayToday: boolean;
-  vacationMode: boolean;
+  canSpendCheatCreditToday: boolean;
 };
 
 export function toLocalDateKey(date: Date): string {
@@ -44,79 +36,74 @@ export function cheatDaysUsedInWeek(
   return Object.keys(cheatDays).filter((k) => weekIdForDateKey(k) === weekId).length;
 }
 
-export function mealsLoggedOnDay(args: {
+function dayCalories(args: {
   dateKey: string;
   todayKey: string;
-  todayMealCount: number;
-  mealCountByDay: Record<string, number>;
+  todayMacros: MacroTotals;
   dailyLog: Record<string, MacroTotals>;
-}): number {
-  const {dateKey, todayKey, todayMealCount, mealCountByDay, dailyLog} = args;
-  if (dateKey === todayKey) return todayMealCount;
-  if (mealCountByDay[dateKey] != null) return mealCountByDay[dateKey]!;
-  if ((dailyLog[dateKey]?.calories ?? 0) > 0) return 1;
-  return 0;
+}): number | null {
+  if (args.dateKey === args.todayKey) return args.todayMacros.calories;
+  const entry = args.dailyLog[args.dateKey];
+  if (!entry) return null;
+  return entry.calories;
 }
 
-function isVacationDay(dateKey: string, flags: StreakDayFlags): boolean {
-  return flags.vacationDays[dateKey] === true;
-}
-
-function dayQualifies(args: {
+function dayMetCalorieGoal(args: {
   dateKey: string;
   todayKey: string;
-  todayMealCount: number;
-  mealCountByDay: Record<string, number>;
+  todayMacros: MacroTotals;
   dailyLog: Record<string, MacroTotals>;
-  flags: StreakDayFlags;
-  cheatDaysPerWeek: number;
+  calorieGoal: number;
+  calorieGoalMode: CalorieGoalMode;
 }): boolean {
-  const meals = mealsLoggedOnDay(args);
-  if (meals > 0) return true;
-  if (isVacationDay(args.dateKey, args.flags)) return true;
-  if (args.flags.fastingDays[args.dateKey]) return true;
-  if (args.flags.cheatDays[args.dateKey]) {
-    return cheatDaysUsedInWeek(args.flags.cheatDays, args.dateKey) <= args.cheatDaysPerWeek;
-  }
-  return false;
+  const calories = dayCalories(args);
+  if (calories === null) return false;
+  if (args.dateKey === args.todayKey && calories <= 0) return false;
+  return macroGoalMet('calories', calories, args.calorieGoal, args.calorieGoalMode);
 }
 
-export function computeLoggingStreak(args: {
+/** Consecutive days meeting the calorie goal (fasting, vacation, cheat days do not affect this). */
+export function computeCalorieStreak(args: {
   todayKey: string;
-  todayMealCount: number;
-  mealCountByDay: Record<string, number>;
+  todayMacros: MacroTotals;
   dailyLog: Record<string, MacroTotals>;
-  flags: StreakDayFlags;
+  calorieGoal: number;
+  calorieGoalMode: CalorieGoalMode;
+  cheatDays: Record<string, true>;
   cheatDaysPerWeek: number;
-}): LoggingStreakSnapshot {
-  const {todayKey, todayMealCount, mealCountByDay, dailyLog, flags, cheatDaysPerWeek} = args;
+}): CalorieStreakSnapshot {
+  const {
+    todayKey,
+    todayMacros,
+    dailyLog,
+    calorieGoal,
+    calorieGoalMode,
+    cheatDays,
+    cheatDaysPerWeek,
+  } = args;
+
   const perDay = {
     todayKey,
-    todayMealCount,
-    mealCountByDay,
+    todayMacros,
     dailyLog,
-    flags,
-    cheatDaysPerWeek,
+    calorieGoal,
+    calorieGoalMode,
   };
 
-  const todayQualifies = dayQualifies({...perDay, dateKey: todayKey});
-  const mealsLoggedToday = todayMealCount;
-  const cheatDaysUsedThisWeek = cheatDaysUsedInWeek(flags.cheatDays, todayKey);
-  const cheatDayToday = flags.cheatDays[todayKey] === true;
-  const fastingToday = flags.fastingDays[todayKey] === true;
-  const vacationToday = isVacationDay(todayKey, flags);
-  const canUseCheatDayToday =
-    mealsLoggedToday === 0 &&
-    !cheatDayToday &&
-    cheatDaysUsedThisWeek < cheatDaysPerWeek;
+  const todayMet = calorieGoal > 0 && dayMetCalorieGoal({...perDay, dateKey: todayKey});
+  const cheatDaysUsedThisWeek = cheatDaysUsedInWeek(cheatDays, todayKey);
+  const cheatDayToday = cheatDays[todayKey] === true;
+  const cheatCreditsRemaining = Math.max(0, cheatDaysPerWeek - cheatDaysUsedThisWeek);
+  const canSpendCheatCreditToday =
+    cheatDaysPerWeek > 0 && !cheatDayToday && cheatCreditsRemaining > 0;
 
   let streakDays = 0;
   const d = new Date(`${todayKey}T12:00:00`);
 
-  if (todayQualifies) {
+  if (todayMet) {
     for (let i = 0; i < 400; i++) {
       const key = toLocalDateKey(d);
-      if (!dayQualifies({...perDay, dateKey: key})) break;
+      if (!dayMetCalorieGoal({...perDay, dateKey: key})) break;
       streakDays++;
       d.setDate(d.getDate() - 1);
     }
@@ -124,7 +111,7 @@ export function computeLoggingStreak(args: {
     d.setDate(d.getDate() - 1);
     for (let i = 0; i < 400; i++) {
       const key = toLocalDateKey(d);
-      if (!dayQualifies({...perDay, dateKey: key})) break;
+      if (!dayMetCalorieGoal({...perDay, dateKey: key})) break;
       streakDays++;
       d.setDate(d.getDate() - 1);
     }
@@ -132,25 +119,24 @@ export function computeLoggingStreak(args: {
 
   return {
     streakDays,
-    includesToday: todayQualifies,
-    todayAtRisk: !todayQualifies && mealsLoggedToday === 0 && !fastingToday && !vacationToday && !cheatDayToday,
-    mealsLoggedToday,
+    includesToday: todayMet,
+    todayAtRisk: calorieGoal > 0 && !todayMet,
+    todayCalories: todayMacros.calories,
+    calorieGoal,
     cheatDaysUsedThisWeek,
     cheatDaysPerWeek,
-    canUseCheatDayToday,
-    fastingToday,
-    vacationToday,
+    cheatCreditsRemaining,
     cheatDayToday,
-    vacationMode: flags.vacationMode,
+    canSpendCheatCreditToday,
   };
 }
 
 export const DEFAULT_CHEAT_DAYS_PER_WEEK = 1;
 
-export function normalizeCheatDaysPerWeek(value: unknown): number {
+export function normalizeCheatDaysPerWeek(value: unknown): 1 | 2 {
   const n = typeof value === 'number' ? value : parseInt(String(value), 10);
-  if (!Number.isFinite(n)) return DEFAULT_CHEAT_DAYS_PER_WEEK;
-  return Math.min(7, Math.max(0, Math.round(n)));
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  return 2;
 }
 
 function normalizeTrueDayRecord(raw: Record<string, unknown> | undefined): Record<string, true> {
@@ -195,6 +181,21 @@ export function normalizeStreakBundle(streak: StreakBundle | undefined): StreakB
   };
 }
 
+/** @deprecated Use CalorieStreakSnapshot */
+export type LoggingStreakSnapshot = CalorieStreakSnapshot;
+
+/** @deprecated Use computeCalorieStreak */
+export const computeLoggingStreak = computeCalorieStreak;
+
+/** @deprecated */
+export type StreakDayFlags = {
+  cheatDays: Record<string, true>;
+  fastingDays: Record<string, true>;
+  vacationDays: Record<string, true>;
+  vacationMode: boolean;
+};
+
+/** @deprecated */
 export function streakBundleToDayFlags(streak: StreakBundle): StreakDayFlags {
   return {
     cheatDays: streak.cheatDays,

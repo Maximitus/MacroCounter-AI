@@ -3,6 +3,9 @@
  * User-provided strings are embedded via JSON.stringify to avoid quote-injection issues.
  */
 
+import type {ProfileAiSnapshot} from './social/profileAiContext.ts';
+import {buildProfileAiBlock} from './social/profileAiContext.ts';
+
 const JSON_ONLY =
   'Respond with valid JSON only: no markdown code fences, no commentary before or after.';
 
@@ -159,20 +162,60 @@ export function promptNutritionCoachChatWithAttachment(userMessage: string): str
     : '[The user attached a PDF or image (e.g. bloodwork, body composition, or nutrition label) — analyze it and respond with practical nutrition guidance. You are not a doctor.]';
 }
 
-/** Daily macro goal suggestions from free-form user notes. */
-export function promptDailyMacroGoals(userNotes: string): string {
-  const notes = JSON.stringify(userNotes);
+/** Daily macro goal suggestions from free-form user notes and optional app context. */
+export function promptDailyMacroGoals(args: {
+  userNotes: string;
+  currentWeightLb?: number | null;
+  targetWeightLb?: number | null;
+  targetDate?: string | null;
+  profile?: ProfileAiSnapshot | null;
+}): string {
+  const notes = JSON.stringify(args.userNotes);
+  const contextLines: string[] = [];
+  const profileWeight =
+    args.profile?.bodyWeightLb != null && args.profile.bodyWeightLb > 0
+      ? args.profile.bodyWeightLb
+      : null;
+  const currentWeightLb = profileWeight ?? args.currentWeightLb;
+  if (currentWeightLb != null && currentWeightLb > 0) {
+    contextLines.push(`Current weight already in the app: ${currentWeightLb} lb`);
+  }
+  if (args.targetWeightLb != null && args.targetWeightLb > 0) {
+    contextLines.push(`Target weight already in the app: ${args.targetWeightLb} lb`);
+  }
+  if (args.targetDate) {
+    contextLines.push(`Target date already in the app: ${args.targetDate} (YYYY-MM-DD)`);
+  }
+  const profileBlock = buildProfileAiBlock(args.profile);
+  const appContextParts: string[] = [];
+  if (contextLines.length > 0) {
+    appContextParts.push(
+      'App context (prefer these over conflicting free-text guesses):',
+      ...contextLines.map((l) => `- ${l}`),
+    );
+  }
+  if (profileBlock) {
+    appContextParts.push(profileBlock);
+  }
+  const appContext = appContextParts.length > 0 ? appContextParts.join('\n') : '';
   return [
     'You are a practical nutrition coach helping set daily macro targets for healthy adults (general wellness guidance, not medical treatment).',
     '',
     'From the user notes, infer appropriate daily calories, protein (g), carbs (g), and fat (g).',
     'Use evidence-informed ranges: prioritize adequate protein, balanced fat, and carbs that fit the stated goal when inferable.',
-    'If age, sex, weight, height, or activity are missing, assume typical values consistent with the goal and reflect that in reasonable round numbers.',
+    'When profile data is provided (gender, height, body weight, body type), use it to estimate maintenance calories and macro split. If age or activity are missing, assume typical values consistent with the goal.',
     '',
+    appContext,
+    appContext ? '' : null,
+    'If age, sex, weight, height, or activity are missing from both notes and profile, assume typical values consistent with the goal and reflect that in reasonable round numbers.',
     'Body weight is the primary goal when mentioned. All weights in the JSON must be in pounds (lb).',
-    '- If the user states their current body weight (e.g. "I weigh 180", "currently 82 kg"), set currentWeightLb to that value converted to pounds when needed (1 kg ≈ 2.20462 lb). Use null if not stated.',
+    '- If the user states their current body weight (e.g. "I weigh 180", "currently 82 kg"), set currentWeightLb to that value converted to pounds when needed (1 kg ≈ 2.20462 lb). Use null if not stated and not provided in app context.',
     '- If the user mentions weight loss, fat loss, cutting, or a target/goal weight (e.g. "want to get to 165", "lose 20 lbs", "goal 75 kg"), set targetWeightLb to that goal in pounds. For vague loss goals without a number, infer a reasonable target from current weight when stated (e.g. ~10% below current). Use null only when no weight change goal is implied.',
     '- Use one decimal when helpful; avoid inventing weights that were not implied.',
+    '',
+    'When targetWeightLb and a target date are known (from app context or user notes), size the daily calorie deficit or surplus to reach the target weight by that date when physiologically realistic.',
+    '- Safe typical rates: about 0.5–2 lb/week loss, about 0.25–0.5 lb/week gain for most adults.',
+    '- If the timeline demands an unsafe rate, choose the most sustainable safe rate instead of crash-diet calories.',
     '',
     'Set calorieGoalMode only when targetWeightLb is null:',
     '- "lose" for fat loss / cut / deficit with no specific target weight',
@@ -183,5 +226,7 @@ export function promptDailyMacroGoals(userNotes: string): string {
     `Output shape: ${MACRO_GOALS_AI_SHAPE}`,
     '',
     `User notes: ${notes}`,
-  ].join('\n');
+  ]
+    .filter((line): line is string => line != null)
+    .join('\n');
 }

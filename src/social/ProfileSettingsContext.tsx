@@ -17,7 +17,7 @@ import {
   resolveProfileHeightUnit,
   resolveProfileWeightUnit,
 } from './profileBody.ts';
-import type {ProfileGender, ProfileHeightUnit, ProfileWeightUnit, UserProfile} from './socialTypes.ts';
+import type {ProfileBodyType, ProfileGender, ProfileHeightUnit, ProfileWeightUnit, UserProfile} from './socialTypes.ts';
 import {useSocial} from './SocialContext.tsx';
 
 type ProfileSettingsContextValue = {
@@ -25,6 +25,8 @@ type ProfileSettingsContextValue = {
   setDisplayName: (value: string) => void;
   gender: ProfileGender | undefined;
   setGender: (value: ProfileGender) => void;
+  bodyType: ProfileBodyType | undefined;
+  setBodyType: (value: ProfileBodyType) => void;
   weightDraft: string;
   setWeightDraft: (value: string) => void;
   weightUnit: ProfileWeightUnit;
@@ -52,6 +54,7 @@ function formatWeightDraft(lb: number, unit: ProfileWeightUnit): string {
 function resetDraftFromProfile(profile: UserProfile, setters: {
   setDisplayName: (v: string) => void;
   setGender: (v: ProfileGender | undefined) => void;
+  setBodyType: (v: ProfileBodyType | undefined) => void;
   setWeightDraft: (v: string) => void;
   setWeightUnit: (v: ProfileWeightUnit) => void;
   setFeet: (v: string) => void;
@@ -64,6 +67,7 @@ function resetDraftFromProfile(profile: UserProfile, setters: {
 
   setters.setDisplayName(profile.displayName ?? '');
   setters.setGender(profile.gender);
+  setters.setBodyType(profile.bodyType);
   setters.setWeightUnit(weightUnit);
 
   const lb = profile.bodyWeightLb;
@@ -132,6 +136,7 @@ export function ProfileSettingsProvider({
     profile,
     saveDisplayName,
     saveGender,
+    saveBodyType,
     saveBodyWeightLb,
     saveHeightCm,
     saveWeightUnit,
@@ -140,6 +145,7 @@ export function ProfileSettingsProvider({
 
   const [displayName, setDisplayName] = useState('');
   const [gender, setGender] = useState<ProfileGender | undefined>();
+  const [bodyType, setBodyType] = useState<ProfileBodyType | undefined>();
   const [weightDraft, setWeightDraft] = useState('');
   const [weightUnit, setWeightUnitState] = useState<ProfileWeightUnit>('lb');
   const [feet, setFeet] = useState('');
@@ -158,6 +164,7 @@ export function ProfileSettingsProvider({
     resetDraftFromProfile(profile, {
       setDisplayName,
       setGender,
+      setBodyType,
       setWeightDraft,
       setWeightUnit: setWeightUnitState,
       setFeet,
@@ -210,6 +217,7 @@ export function ProfileSettingsProvider({
     const trimmedName = displayName.trim();
     if (trimmedName !== (profile.displayName ?? '')) return true;
     if (gender !== profile.gender) return true;
+    if (bodyType !== profile.bodyType) return true;
 
     const savedWUnit = resolveProfileWeightUnit(profile.weightUnit);
     if (weightUnit !== savedWUnit) return true;
@@ -224,7 +232,7 @@ export function ProfileSettingsProvider({
     if (draftCm !== profileCm) return true;
 
     return false;
-  }, [cmDraft, displayName, feet, gender, heightUnit, inches, profile, weightDraft, weightUnit]);
+  }, [bodyType, cmDraft, displayName, feet, gender, heightUnit, inches, profile, weightDraft, weightUnit]);
 
   const save = useCallback(async () => {
     if (!profile || !isDirty) return;
@@ -244,6 +252,7 @@ export function ProfileSettingsProvider({
 
     const nameChanged = trimmedName !== (profile.displayName ?? '');
     const genderChanged = gender !== profile.gender;
+    const bodyTypeChanged = bodyType !== profile.bodyType;
     const weightUnitChanged = weightUnit !== savedWUnit;
     const weightChanged = draftLb !== profileLb;
     const heightUnitChanged = heightUnit !== savedHUnit;
@@ -267,6 +276,7 @@ export function ProfileSettingsProvider({
       const tasks: Promise<void>[] = [];
       if (nameChanged) tasks.push(saveDisplayName(trimmedName));
       if (genderChanged && gender) tasks.push(saveGender(gender));
+      if (bodyTypeChanged && bodyType) tasks.push(saveBodyType(bodyType));
       if (weightUnitChanged) tasks.push(saveWeightUnit(weightUnit));
       if (weightChanged && draftLb != null) tasks.push(saveBodyWeightLb(draftLb));
       if (heightUnitChanged) tasks.push(saveHeightUnit(heightUnit));
@@ -279,6 +289,7 @@ export function ProfileSettingsProvider({
       setSaving(false);
     }
   }, [
+    bodyType,
     displayName,
     feet,
     gender,
@@ -287,6 +298,7 @@ export function ProfileSettingsProvider({
     cmDraft,
     isDirty,
     profile,
+    saveBodyType,
     saveBodyWeightLb,
     saveDisplayName,
     saveGender,
@@ -303,6 +315,8 @@ export function ProfileSettingsProvider({
       setDisplayName,
       gender,
       setGender,
+      bodyType,
+      setBodyType,
       weightDraft,
       setWeightDraft,
       weightUnit,
@@ -320,6 +334,7 @@ export function ProfileSettingsProvider({
       save,
     }),
     [
+      bodyType,
       cmDraft,
       displayName,
       feet,

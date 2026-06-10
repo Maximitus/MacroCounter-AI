@@ -230,6 +230,12 @@ export function mergeMacroBundles({
       localUpdatedMs,
       remoteUpdatedMs,
     ),
+    weightGoalDate: pickNewer(
+      localCanon.weightGoalDate,
+      remoteCanon.weightGoalDate,
+      localUpdatedMs,
+      remoteUpdatedMs,
+    ),
     calorieGoalMode: pickNewer(
       localCanon.calorieGoalMode,
       remoteCanon.calorieGoalMode,

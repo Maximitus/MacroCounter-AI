@@ -194,6 +194,7 @@ export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
         typeof bundle.weightGoal === 'number' && Number.isFinite(bundle.weightGoal)
           ? Math.round(bundle.weightGoal * 10) / 10
           : 0,
+      weightGoalDate: normalizeWeightGoalDate(bundle.weightGoalDate),
       calorieGoalMode: normalizeCalorieGoalMode(bundle.calorieGoalMode),
       weightLog: sortRecordKeys(normalizeWeightLog(bundle.weightLog)),
       favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
@@ -231,6 +232,7 @@ export function macroBundleFingerprint(bundle: MacroDataBundle): string {
     goals: c.goals,
     dailyLog: c.dailyLog,
     weightGoal: c.weightGoal,
+    weightGoalDate: c.weightGoalDate,
     calorieGoalMode: c.calorieGoalMode,
     weightLog: c.weightLog,
     favorites: c.favorites,
@@ -246,6 +248,32 @@ function loadCalorieGoalMode() {
     return normalizeCalorieGoalMode(saved);
   } catch {
     return normalizeCalorieGoalMode(undefined);
+  }
+}
+
+/** ISO date YYYY-MM-DD for weight goal timeline; empty string when unset. */
+export function normalizeWeightGoalDate(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const s = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+  const [y, m, d] = s.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== m - 1 ||
+    date.getDate() !== d
+  ) {
+    return '';
+  }
+  return s;
+}
+
+function loadWeightGoalDate(): string {
+  try {
+    const saved = localStorage.getItem('weightGoalDate');
+    return saved ? normalizeWeightGoalDate(saved) : '';
+  } catch {
+    return '';
   }
 }
 
@@ -341,6 +369,7 @@ export function loadLocalMacroBundleRaw(): MacroDataBundle {
     goals,
     dailyLog,
     weightGoal: loadWeightGoal(),
+    weightGoalDate: loadWeightGoalDate(),
     calorieGoalMode: loadCalorieGoalMode(),
     weightLog: loadWeightLog(),
     favorites,
@@ -358,6 +387,11 @@ export function saveLocalMacroBundle(bundle: MacroDataBundle, atMs = Date.now())
     localStorage.setItem('goals', JSON.stringify(canonical.goals));
     localStorage.setItem('dailyLog', JSON.stringify(canonical.dailyLog));
     localStorage.setItem('weightGoal', JSON.stringify(canonical.weightGoal));
+    if (canonical.weightGoalDate) {
+      localStorage.setItem('weightGoalDate', canonical.weightGoalDate);
+    } else {
+      localStorage.removeItem('weightGoalDate');
+    }
     localStorage.setItem('calorieGoalMode', canonical.calorieGoalMode);
     localStorage.setItem('weightLog', JSON.stringify(canonical.weightLog));
     localStorage.setItem('favorites', JSON.stringify(canonical.favorites));

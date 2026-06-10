@@ -20,7 +20,7 @@ export function BodyWeightField() {
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-fg">Weight</p>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <input
           type="number"
           min={0}
@@ -29,7 +29,7 @@ export function BodyWeightField() {
           value={weightDraft}
           onChange={(e) => setWeightDraft(e.target.value)}
           placeholder={weightUnit === 'lb' ? 'e.g. 175.4' : 'e.g. 79.5'}
-          className="min-w-0 flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
+          className="min-w-[3rem] flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2 py-1.5 text-center text-sm tabular-nums text-fg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/45"
         />
         <ProfileUnitSelect
           value={weightUnit}

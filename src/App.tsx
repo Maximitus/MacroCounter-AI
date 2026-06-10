@@ -22,6 +22,7 @@ import {
   Scale,
   Plus,
   Sparkles,
+  Ticket,
   User,
 } from 'lucide-react';
 import {
@@ -46,13 +47,11 @@ import {
 } from './aiPrompts';
 import {AiChatScreen} from './AiChatScreen.tsx';
 import {CalorieGoalModePill} from './CalorieGoalModePill.tsx';
-import {LoggingStreakCard} from './LoggingStreakCard.tsx';
-import {LoggingStreakModal} from './LoggingStreakModal.tsx';
+import {StreakCard} from './LoggingStreakCard.tsx';
+import {StreakModal} from './LoggingStreakModal.tsx';
 import {
-  computeLoggingStreak,
-  normalizeCheatDaysPerWeek,
+  computeCalorieStreak,
   normalizeStreakBundle,
-  streakBundleToDayFlags,
 } from './loggingStreak.ts';
 import {assessGoalHealth, calorieGoalModeFromWeightDelta} from './goalHealth.ts';
 import {UnhealthyGoalWarningModal} from './UnhealthyGoalWarningModal.tsx';
@@ -899,6 +898,18 @@ export default function App() {
     const n = parseFloat(saved);
     return Number.isFinite(n) ? n : 0;
   });
+  const [weightGoalDate, setWeightGoalDate] = useState(() => {
+    const saved = localStorage.getItem('weightGoalDate');
+    if (!saved) return '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(saved.trim()) ? saved.trim() : '';
+  });
+  const [macroGoalsEstablished, setMacroGoalsEstablished] = useState(() => {
+    if (localStorage.getItem('macroGoalsEstablished') === '1') return true;
+    const saved = localStorage.getItem('weightGoal');
+    if (!saved) return false;
+    const n = parseFloat(saved);
+    return Number.isFinite(n) && n > 0;
+  });
   const [calorieGoalMode, setCalorieGoalMode] = useState<CalorieGoalMode>(() =>
     normalizeCalorieGoalMode(localStorage.getItem('calorieGoalMode')),
   );
@@ -928,6 +939,7 @@ export default function App() {
   const [goalsModalBaseline, setGoalsModalBaseline] = useState<{
     goals: typeof goals;
     weightGoal: number;
+    weightGoalDate: string;
     calorieGoalMode: CalorieGoalMode;
     cheatDaysPerWeek: number;
   } | null>(null);
@@ -1022,6 +1034,7 @@ export default function App() {
     goals,
     dailyLog,
     weightGoal,
+    weightGoalDate,
     calorieGoalMode,
     weightLog,
     favorites,
@@ -1037,6 +1050,7 @@ export default function App() {
     setGoals,
     setDailyLog,
     setWeightGoal,
+    setWeightGoalDate,
     setCalorieGoalMode,
     setWeightLog,
     setFavorites,
@@ -1052,6 +1066,11 @@ export default function App() {
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
 
+  const profileForAi = useMemo(
+    () => profileAiSnapshot(socialProfile, {fallbackWeightLb: getLatestWeight(weightLog)}),
+    [socialProfile, weightLog],
+  );
+
   const aiCoachInputs = useMemo(
     () => ({
       goals,
@@ -1065,9 +1084,9 @@ export default function App() {
         macros: meal.macros,
       })),
       recentDailyTotals: recentDailyTotalsFromLog(dailyLog, 7, getTodayKey()),
-      profile: profileAiSnapshot(socialProfile),
+      profile: profileForAi,
     }),
-    [goals, calorieGoalMode, macros, history, dailyLog, socialProfile],
+    [goals, calorieGoalMode, macros, history, dailyLog, profileForAi],
   );
 
   useEffect(() => {
@@ -1153,7 +1172,13 @@ export default function App() {
     localStorage.setItem('weightLog', JSON.stringify(weightLog));
     localStorage.setItem('weightGoal', JSON.stringify(weightGoal));
     localStorage.setItem('calorieGoalMode', calorieGoalMode);
-  }, [weightLog, weightGoal, calorieGoalMode]);
+    if (weightGoalDate) {
+      localStorage.setItem('weightGoalDate', weightGoalDate);
+    } else {
+      localStorage.removeItem('weightGoalDate');
+    }
+    localStorage.setItem('macroGoalsEstablished', macroGoalsEstablished ? '1' : '0');
+  }, [weightLog, weightGoal, weightGoalDate, calorieGoalMode, macroGoalsEstablished]);
 
   const streakBundle = useMemo(
     () =>
@@ -1180,13 +1205,6 @@ export default function App() {
   }, [streakBundle]);
 
   useEffect(() => {
-    const key = getTodayKey();
-    setMealCountByDay((prev) =>
-      prev[key] === history.length ? prev : {...prev, [key]: history.length},
-    );
-  }, [history]);
-
-  useEffect(() => {
     if (!streakVacationMode) return;
     const key = getTodayKey();
     setStreakVacationDays((prev) => (prev[key] ? prev : {...prev, [key]: true}));
@@ -1206,6 +1224,7 @@ export default function App() {
       setGoalsModalBaseline({
         goals: {...goals},
         weightGoal,
+        weightGoalDate,
         calorieGoalMode,
         cheatDaysPerWeek,
       });
@@ -1215,22 +1234,18 @@ export default function App() {
     }
   }, [isGoalsModalOpen]);
 
-  const streakFlags = useMemo(
-    () => streakBundleToDayFlags(streakBundle),
-    [streakBundle],
-  );
-
-  const loggingStreakSnapshot = useMemo(
+  const calorieStreakSnapshot = useMemo(
     () =>
-      computeLoggingStreak({
+      computeCalorieStreak({
         todayKey: getTodayKey(),
-        todayMealCount: history.length,
-        mealCountByDay,
+        todayMacros: macros,
         dailyLog,
-        flags: streakFlags,
+        calorieGoal: goals.calories,
+        calorieGoalMode,
+        cheatDays: streakCheatDays,
         cheatDaysPerWeek,
       }),
-    [history.length, mealCountByDay, dailyLog, streakFlags, cheatDaysPerWeek],
+    [macros, dailyLog, goals.calories, calorieGoalMode, streakCheatDays, cheatDaysPerWeek],
   );
 
   const goalsModalDirty = useMemo(() => {
@@ -1241,10 +1256,27 @@ export default function App() {
       goals.carbs !== goalsModalBaseline.goals.carbs ||
       goals.fat !== goalsModalBaseline.goals.fat ||
       weightGoal !== goalsModalBaseline.weightGoal ||
+      weightGoalDate !== goalsModalBaseline.weightGoalDate ||
       calorieGoalMode !== goalsModalBaseline.calorieGoalMode ||
       cheatDaysPerWeek !== goalsModalBaseline.cheatDaysPerWeek
     );
-  }, [isGoalsModalOpen, goalsModalBaseline, goals, weightGoal, calorieGoalMode, cheatDaysPerWeek]);
+  }, [
+    isGoalsModalOpen,
+    goalsModalBaseline,
+    goals,
+    weightGoal,
+    weightGoalDate,
+    calorieGoalMode,
+    cheatDaysPerWeek,
+  ]);
+
+  const shouldPromptRegenerateGoals =
+    isGoalsModalOpen &&
+    macroGoalsEstablished &&
+    weightGoal > 0 &&
+    goalsModalBaseline != null &&
+    (weightGoal !== goalsModalBaseline.weightGoal ||
+      weightGoalDate !== goalsModalBaseline.weightGoalDate);
 
   const applyAiGeneratedGoals = (result: Record<string, unknown>) => {
     const nextGoals = normalizeAiMacros(result);
@@ -1281,8 +1313,22 @@ export default function App() {
     }
 
     setGoals(nextGoals);
+    setMacroGoalsEstablished(true);
+    if (isGoalsModalOpen) {
+      setGoalsModalBaseline((prev) =>
+        prev
+          ? {
+              ...prev,
+              goals: nextGoals,
+              weightGoal: nextWeightGoal,
+              weightGoalDate,
+              calorieGoalMode: nextCalorieGoalMode,
+            }
+          : null,
+      );
+    }
 
-    const parts = ['Daily goals updated via AI.'];
+    const parts = ['Goals updated via AI.'];
     if (cw != null) {
       parts.push(`Logged current weight (${formatMacroAmount(cw)} lb).`);
     }
@@ -1340,8 +1386,15 @@ export default function App() {
       calorieGoalMode,
     });
     const commit = () => {
-      setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode, cheatDaysPerWeek});
-      toast.success('Daily goals saved');
+      setMacroGoalsEstablished(true);
+      setGoalsModalBaseline({
+        goals: {...goals},
+        weightGoal,
+        weightGoalDate,
+        calorieGoalMode,
+        cheatDaysPerWeek,
+      });
+      toast.success('Goals saved');
       setGoalHealthWarning(null);
     };
     if (concerns.length === 0) {
@@ -1355,6 +1408,7 @@ export default function App() {
     if (goalsModalBaseline) {
       setGoals({...goalsModalBaseline.goals});
       setWeightGoal(goalsModalBaseline.weightGoal);
+      setWeightGoalDate(goalsModalBaseline.weightGoalDate);
       setCalorieGoalMode(goalsModalBaseline.calorieGoalMode);
       setCheatDaysPerWeek(goalsModalBaseline.cheatDaysPerWeek);
     }
@@ -1362,16 +1416,26 @@ export default function App() {
     setIsGoalsModalOpen(false);
   };
 
+  const spendCheatCreditToday = () => {
+    const key = getTodayKey();
+    if (!calorieStreakSnapshot.canSpendCheatCreditToday) return;
+    setStreakCheatDays((prev) => ({...prev, [key]: true}));
+  };
+
+  const refundCheatCreditToday = () => {
+    const key = getTodayKey();
+    setStreakCheatDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
+  };
+
   const setFastingToday = (enabled: boolean) => {
     const key = getTodayKey();
     if (enabled) {
       setStreakFastingDays((prev) => ({...prev, [key]: true}));
-      setStreakCheatDays((prev) => {
-        if (!prev[key]) return prev;
-        const next = {...prev};
-        delete next[key];
-        return next;
-      });
       return;
     }
     setStreakFastingDays((prev) => {
@@ -1397,42 +1461,7 @@ export default function App() {
     });
   };
 
-  const setCheatDayToday = (enabled: boolean) => {
-    const key = getTodayKey();
-    if (!enabled) {
-      setStreakCheatDays((prev) => {
-        if (!prev[key]) return prev;
-        const next = {...prev};
-        delete next[key];
-        return next;
-      });
-      return;
-    }
-    if (history.length > 0 || !loggingStreakSnapshot.canUseCheatDayToday) return;
-    setStreakCheatDays((prev) => ({...prev, [key]: true}));
-    setStreakFastingDays((prev) => {
-      if (!prev[key]) return prev;
-      const next = {...prev};
-      delete next[key];
-      return next;
-    });
-  };
-
-  const clearTodayEphemeralStreakFlags = () => {
-    const key = getTodayKey();
-    setStreakFastingDays((prev) => {
-      if (!prev[key]) return prev;
-      const next = {...prev};
-      delete next[key];
-      return next;
-    });
-    setStreakCheatDays((prev) => {
-      if (!prev[key]) return prev;
-      const next = {...prev};
-      delete next[key];
-      return next;
-    });
-  };
+  const todayFasting = streakFastingDays[getTodayKey()] === true;
 
   useEffect(() => {
     saveShowSocialOnOverview(showSocialOnOverview);
@@ -1504,7 +1533,6 @@ export default function App() {
       fat: prev.fat + macrosToAdd.fat,
     }));
     setHistory(prev => [...prev, {id: Date.now().toString(), name, macros: macrosToAdd}]);
-    clearTodayEphemeralStreakFlags();
     toast.success(`Added ${name} to daily log`);
   };
 
@@ -1871,7 +1899,7 @@ export default function App() {
                 type="button"
                 className="rounded-lg p-1.5 text-fg transition hover:bg-[var(--color-surface)]"
                 onClick={() => setIsGoalsModalOpen(true)}
-                aria-label="Set daily goals (macros and weight goal)"
+                aria-label="Set goals (macros and weight goal)"
               >
                 <Target className="h-5 w-5" />
               </button>
@@ -1915,8 +1943,9 @@ export default function App() {
           })()}
         </section>
 
-        <LoggingStreakCard
-          snapshot={loggingStreakSnapshot}
+        <StreakCard
+          snapshot={calorieStreakSnapshot}
+          calorieGoalMode={calorieGoalMode}
           onOpen={() => setStreakOpen(true)}
         />
 
@@ -2702,167 +2731,205 @@ export default function App() {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-6">
           <div className="mx-auto w-full max-w-md py-2">
             <div className="glass w-full rounded-2xl border border-[var(--color-accent)]/10 p-4 shadow-lg accent-glow sm:p-6">
-              <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set daily goals</h2>
+              <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set goals</h2>
               <div className="space-y-4">
                 <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                  <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI daily goals</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Goals</h3>
+                  <div className="space-y-4">
+                    {weightGoal <= 0 ? (
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-[var(--color-text-light)]">Calorie goal</p>
+                        <CalorieGoalModePill value={calorieGoalMode} onChange={setCalorieGoalMode} />
+                      </div>
+                    ) : null}
+                    <div>
+                      <label
+                        htmlFor="goal-weight"
+                        className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
+                      >
+                        {weightGoal > 0 ? 'Weight goal & desired date' : 'Weight goal'}
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="flex min-w-[8rem] flex-1 items-center rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]">
+                          <input
+                            id="goal-weight"
+                            name="goal_weight"
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder={profileWeightUnit === 'lb' ? 'e.g. 165' : 'e.g. 75'}
+                            value={
+                              weightGoalFieldDraft !== null
+                                ? weightGoalFieldDraft
+                                : weightGoal > 0
+                                  ? formatMacroAmount(weightFromLb(weightGoal, profileWeightUnit))
+                                  : ''
+                            }
+                            onChange={(e) => {
+                              const s = sanitizeMacroAmountRaw(e.target.value);
+                              setWeightGoalFieldDraft(s);
+                              const nextGoalLb = weightToLb(parseMacroAmountInput(s), profileWeightUnit);
+                              setWeightGoal(nextGoalLb);
+                              if (nextGoalLb <= 0) setWeightGoalDate('');
+                              const latest = getLatestWeight(weightLog);
+                              const derivedMode = calorieGoalModeFromWeightDelta(latest, nextGoalLb);
+                              if (derivedMode) setCalorieGoalMode(derivedMode);
+                            }}
+                            onBlur={() => setWeightGoalFieldDraft(null)}
+                            className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm tabular-nums text-fg outline-none"
+                          />
+                        </div>
+                        <ProfileUnitSelect
+                          value={profileWeightUnit}
+                          options={WEIGHT_UNIT_OPTIONS}
+                          ariaLabel="Weight goal unit"
+                          onChange={(unit) => {
+                            if (weightGoalFieldDraft !== null) {
+                              const val = parseMacroAmountInput(weightGoalFieldDraft);
+                              if (val > 0) {
+                                setWeightGoalFieldDraft(
+                                  formatMacroAmount(
+                                    weightFromLb(weightToLb(val, profileWeightUnit), unit),
+                                  ),
+                                );
+                              }
+                            }
+                            if (socialEnabled) {
+                              void saveWeightUnit(unit).catch((e) =>
+                                console.error('Could not save weight unit', e),
+                              );
+                            } else {
+                              setGuestWeightUnit(unit);
+                            }
+                          }}
+                        />
+                        {weightGoal > 0 ? (
+                          <input
+                            id="goal-weight-date"
+                            name="goal_weight_date"
+                            type="date"
+                            min={getTodayKey()}
+                            value={weightGoalDate}
+                            onChange={(e) => setWeightGoalDate(e.target.value)}
+                            aria-label="Desired date"
+                            className="min-w-[9.5rem] flex-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-2.5 py-2 text-sm text-fg"
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                    <MacroInputGrid
+                      idPrefix="goal"
+                      valueForKey={(key) => String(goals[key])}
+                      onChange={(key, raw) =>
+                        setGoals((prev) => ({
+                          ...prev,
+                          [key]: parseGoalIntInput(raw),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-fg brand-font">Cheat days</h3>
+                    <p className="text-xs tabular-nums text-[var(--color-text-light)]">
+                      {cheatDaysPerWeek} per week
+                    </p>
+                  </div>
+                  <div className="flex justify-center gap-4">
+                    {([1, 2] as const).map((n, i) => {
+                      const highlighted =
+                        cheatDaysPerWeek === 2 ? true : cheatDaysPerWeek === 1 && i === 0;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={highlighted}
+                          aria-label={`${n} cheat day${n === 1 ? '' : 's'} per week`}
+                          onClick={() => setCheatDaysPerWeek(n)}
+                          className="transition active:opacity-80"
+                        >
+                          <span
+                            className={`flex h-14 w-14 items-center justify-center rounded-full border-[3px] transition ${
+                              highlighted
+                                ? 'border-fg/45 bg-[var(--color-surface)]'
+                                : 'border-[var(--color-text-light)]/35 bg-[var(--color-surface)] hover:border-fg/45 hover:bg-[var(--color-panel-hover)]'
+                            }`}
+                          >
+                            <Ticket
+                              className={`h-6 w-6 ${
+                                highlighted ? 'text-fg' : 'text-[var(--color-text-light)]'
+                              }`}
+                              aria-hidden
+                            />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI Assist</h3>
+                  {shouldPromptRegenerateGoals ? (
+                    <p className="mb-3 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-accent)]/10 px-3 py-2 text-xs leading-relaxed text-fg">
+                      Weight or target date changed — regenerate goals to update your macros.
+                    </p>
+                  ) : null}
                   {goalsAiLoading ? (
                     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] py-8">
                       <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
-                      <span className="text-sm text-[var(--color-text-light)]">Generating goals…</span>
+                      <span className="text-sm text-[var(--color-text-light)]">
+                        {macroGoalsEstablished ? 'Regenerating goals…' : 'Generating goals…'}
+                      </span>
                     </div>
                   ) : (
-                  <>
-                    <textarea
-                      id="goals-ai-prompt"
-                      name="goals_ai_prompt"
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
-                      className="mb-2 w-full resize-none rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] p-3 text-fg"
-                      rows={3}
-                    />
-                    <button 
-                      type="button"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-                      disabled={!aiPrompt.trim()}
-                      onClick={async () => {
-                        setGoalsAiLoading(true);
-                        try {
-                          const text = await generateContentJson({
-                            parts: [
-                              {
-                                text: promptDailyMacroGoals(aiPrompt),
-                              },
-                            ],
-                          });
-                          const result = JSON.parse(text) as Record<string, unknown>;
-                          confirmAiGeneratedGoals(result);
-                        } catch (error) {
-                          console.error("Error generating goals:", error);
-                          toastAiConfigError(error, 'Could not generate goals.');
-                        } finally {
-                          setGoalsAiLoading(false);
-                        }
-                      }}
-                    >
-                      <Sparkles className="h-4 w-4" aria-hidden />
-                      Generate goals with AI
-                    </button>
-                  </>
-                )}
-              </div>
-              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Daily goals</h3>
-                <div className="space-y-4">
-                  {weightGoal <= 0 ? (
-                    <div>
-                      <p className="mb-2 text-xs font-medium text-[var(--color-text-light)]">Calorie goal</p>
-                      <CalorieGoalModePill value={calorieGoalMode} onChange={setCalorieGoalMode} />
-                    </div>
-                  ) : null}
-                  <div>
-                    <label
-                      htmlFor="goal-weight"
-                      className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
-                    >
-                      Weight goal
-                    </label>
-                    <div className="flex gap-2">
-                      <div className="flex min-w-0 flex-1 items-center rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]">
-                        <input
-                          id="goal-weight"
-                          name="goal_weight"
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          placeholder={profileWeightUnit === 'lb' ? 'e.g. 165' : 'e.g. 75'}
-                          value={
-                            weightGoalFieldDraft !== null
-                              ? weightGoalFieldDraft
-                              : weightGoal > 0
-                                ? formatMacroAmount(weightFromLb(weightGoal, profileWeightUnit))
-                                : ''
-                          }
-                          onChange={(e) => {
-                            const s = sanitizeMacroAmountRaw(e.target.value);
-                            setWeightGoalFieldDraft(s);
-                            const nextGoalLb = weightToLb(parseMacroAmountInput(s), profileWeightUnit);
-                            setWeightGoal(nextGoalLb);
-                            const latest = getLatestWeight(weightLog);
-                            const derivedMode = calorieGoalModeFromWeightDelta(latest, nextGoalLb);
-                            if (derivedMode) setCalorieGoalMode(derivedMode);
-                          }}
-                          onBlur={() => setWeightGoalFieldDraft(null)}
-                          className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm tabular-nums text-fg outline-none"
-                        />
-                      </div>
-                      <ProfileUnitSelect
-                        value={profileWeightUnit}
-                        options={WEIGHT_UNIT_OPTIONS}
-                        ariaLabel="Weight goal unit"
-                        onChange={(unit) => {
-                          if (weightGoalFieldDraft !== null) {
-                            const val = parseMacroAmountInput(weightGoalFieldDraft);
-                            if (val > 0) {
-                              setWeightGoalFieldDraft(
-                                formatMacroAmount(
-                                  weightFromLb(weightToLb(val, profileWeightUnit), unit),
-                                ),
-                              );
-                            }
-                          }
-                          if (socialEnabled) {
-                            void saveWeightUnit(unit).catch((e) =>
-                              console.error('Could not save weight unit', e),
-                            );
-                          } else {
-                            setGuestWeightUnit(unit);
+                    <>
+                      <textarea
+                        id="goals-ai-prompt"
+                        name="goals_ai_prompt"
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
+                        className="mb-2 w-full resize-none rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] p-3 text-fg"
+                        rows={3}
+                      />
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                        disabled={!aiPrompt.trim()}
+                        onClick={async () => {
+                          setGoalsAiLoading(true);
+                          try {
+                            const text = await generateContentJson({
+                              parts: [
+                                {
+                                  text: promptDailyMacroGoals({
+                                    userNotes: aiPrompt,
+                                    profile: profileForAi,
+                                    currentWeightLb: getLatestWeight(weightLog),
+                                    targetWeightLb: weightGoal > 0 ? weightGoal : null,
+                                    targetDate: weightGoalDate || null,
+                                  }),
+                                },
+                              ],
+                            });
+                            const result = JSON.parse(text) as Record<string, unknown>;
+                            confirmAiGeneratedGoals(result);
+                          } catch (error) {
+                            console.error('Error generating goals:', error);
+                            toastAiConfigError(error, 'Could not generate goals.');
+                          } finally {
+                            setGoalsAiLoading(false);
                           }
                         }}
-                      />
-                    </div>
-                  </div>
-                  <MacroInputGrid
-                    idPrefix="goal"
-                    valueForKey={(key) => String(goals[key])}
-                    onChange={(key, raw) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        [key]: parseGoalIntInput(raw),
-                      }))
-                    }
-                  />
+                      >
+                        <Sparkles className="h-4 w-4" aria-hidden />
+                        {macroGoalsEstablished ? 'Regenerate goals' : 'Generate goals with AI'}
+                      </button>
+                    </>
+                  )}
                 </div>
-              </div>
-              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Logging streak</h3>
-                <div>
-                  <label
-                    htmlFor="cheat-days-per-week"
-                    className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
-                  >
-                    Cheat days per week
-                  </label>
-                  <p className="mb-2 text-xs text-[var(--color-text-light)]">
-                    Skip logging on a day without breaking your streak. Resets each calendar week.
-                  </p>
-                  <input
-                    id="cheat-days-per-week"
-                    name="cheat_days_per_week"
-                    type="number"
-                    min={0}
-                    max={7}
-                    step={1}
-                    value={cheatDaysPerWeek}
-                    onChange={(e) =>
-                      setCheatDaysPerWeek(normalizeCheatDaysPerWeek(e.target.value))
-                    }
-                    className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2.5 text-sm tabular-nums text-fg"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
+                <div className="flex gap-2">
                 <button
                   type="button"
                   className="flex-1 rounded-full bg-[var(--color-surface)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
@@ -2994,13 +3061,16 @@ export default function App() {
         />
       ) : null}
 
-      <LoggingStreakModal
+      <StreakModal
         open={streakOpen}
-        snapshot={loggingStreakSnapshot}
+        snapshot={calorieStreakSnapshot}
+        fastingToday={todayFasting}
+        vacationMode={streakVacationMode}
         onClose={() => setStreakOpen(false)}
         onSetFasting={setFastingToday}
         onSetVacation={setVacationMode}
-        onSetCheatDay={setCheatDayToday}
+        onSpendCheatCredit={spendCheatCreditToday}
+        onRefundCheatCredit={refundCheatCreditToday}
       />
 
       {coachOpen ? (

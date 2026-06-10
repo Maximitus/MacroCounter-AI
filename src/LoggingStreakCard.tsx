@@ -1,16 +1,30 @@
 import {ChevronRight, Flame} from 'lucide-react';
-import type {LoggingStreakSnapshot} from './loggingStreak.ts';
+import type {CalorieStreakSnapshot} from './loggingStreak.ts';
+import {calorieGoalModeLabel} from './macroProgress.ts';
+import type {CalorieGoalMode} from './macroData/macroTypes.ts';
 
-export function LoggingStreakCard({
+export function StreakCard({
   snapshot,
+  calorieGoalMode,
   onOpen,
 }: {
-  snapshot: LoggingStreakSnapshot;
+  snapshot: CalorieStreakSnapshot;
+  calorieGoalMode: CalorieGoalMode;
   onOpen: () => void;
 }) {
-  const {streakDays, todayAtRisk, includesToday} = snapshot;
-  const label =
-    streakDays === 1 ? '1 day streak' : `${streakDays} day streak`;
+  const {streakDays, todayAtRisk, includesToday, calorieGoal} = snapshot;
+  const label = streakDays === 1 ? '1 day streak' : `${streakDays} day streak`;
+
+  let subtitle = 'Meet your goal each day to build a streak';
+  if (calorieGoal <= 0) {
+    subtitle = 'Set a goal to start a streak';
+  } else if (todayAtRisk) {
+    subtitle = `Hit your ${calorieGoalModeLabel(calorieGoalMode).toLowerCase()} goal to keep it going`;
+  } else if (includesToday) {
+    subtitle = 'Goal met today';
+  } else if (streakDays > 0) {
+    subtitle = 'Streak through yesterday — meet today\'s goal to extend it';
+  }
 
   return (
     <button
@@ -24,17 +38,13 @@ export function LoggingStreakCard({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-lg font-semibold tabular-nums text-fg brand-font">{label}</p>
-        <p className="mt-0.5 text-sm text-[var(--color-text-light)]">
-          {todayAtRisk
-            ? 'Log a meal, mark fasting, or use a cheat day to keep it going'
-            : includesToday
-              ? 'You logged today — nice work'
-              : streakDays > 0
-                ? 'Streak through yesterday — log today to extend it'
-                : 'Log a meal each day to build your streak'}
-        </p>
+        <p className="mt-0.5 text-sm text-[var(--color-text-light)]">{subtitle}</p>
       </div>
       <ChevronRight className="h-5 w-5 shrink-0 text-[var(--color-text-light)]" aria-hidden />
     </button>
   );
 }
+
+/** @deprecated Use StreakCard */
+export const CalorieStreakCard = StreakCard;
+export const LoggingStreakCard = StreakCard;

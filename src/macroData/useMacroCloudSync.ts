@@ -11,6 +11,7 @@ import {
   loadLocalMacroBundleRaw,
   macroBundleFingerprint,
   markLocalBundleUpdatedAt,
+  normalizeWeightGoalDate,
   saveLocalMacroBundle,
   setLastSyncedBundle,
 } from './macroLocalPersistence.ts';
@@ -48,6 +49,7 @@ function emptyMacroBundle(): MacroDataBundle {
     goals: {calories: 2000, protein: 150, carbs: 200, fat: 70},
     dailyLog: {},
     weightGoal: 0,
+    weightGoalDate: '',
     calorieGoalMode: 'maintain',
     weightLog: {},
     favorites: [],
@@ -68,6 +70,7 @@ function bundleFromSnapshot(raw: Record<string, unknown> | undefined): MacroData
         ? (raw.dailyLog as Record<string, MacroTotals>)
         : {},
     weightGoal: typeof raw.weightGoal === 'number' ? raw.weightGoal : 0,
+    weightGoalDate: normalizeWeightGoalDate(raw.weightGoalDate),
     calorieGoalMode: normalizeCalorieGoalMode(raw.calorieGoalMode),
     weightLog:
       raw.weightLog && typeof raw.weightLog === 'object'
@@ -146,6 +149,7 @@ function applyBundleToState(
     setGoals: (v: MacroTotals) => void;
     setDailyLog: (v: Record<string, MacroTotals>) => void;
     setWeightGoal: (v: number) => void;
+    setWeightGoalDate: (v: string) => void;
     setCalorieGoalMode: (v: CalorieGoalMode) => void;
     setWeightLog: (v: Record<string, number>) => void;
     setFavorites: (v: FavoriteEntry[]) => void;
@@ -166,6 +170,7 @@ function applyBundleToState(
   setters.setGoals(bundle.goals);
   setters.setDailyLog(bundle.dailyLog);
   setters.setWeightGoal(bundle.weightGoal);
+  setters.setWeightGoalDate(bundle.weightGoalDate);
   setters.setCalorieGoalMode(bundle.calorieGoalMode);
   setters.setWeightLog(bundle.weightLog);
   setters.setFavorites(bundle.favorites);
@@ -183,6 +188,7 @@ async function writeBundleToCloud(uid: string, bundle: MacroDataBundle) {
     goals: canonical.goals,
     dailyLog: canonical.dailyLog,
     weightGoal: canonical.weightGoal,
+    weightGoalDate: canonical.weightGoalDate,
     calorieGoalMode: canonical.calorieGoalMode,
     weightLog: canonical.weightLog,
     favorites: canonical.favorites,
@@ -234,6 +240,7 @@ export type MacroCloudSyncProps = {
   goals: MacroTotals;
   dailyLog: Record<string, MacroTotals>;
   weightGoal: number;
+  weightGoalDate: string;
   calorieGoalMode: CalorieGoalMode;
   weightLog: Record<string, number>;
   favorites: FavoriteEntry[];
@@ -249,6 +256,7 @@ export type MacroCloudSyncProps = {
   setGoals: (v: MacroTotals) => void;
   setDailyLog: (v: Record<string, MacroTotals>) => void;
   setWeightGoal: (v: number) => void;
+  setWeightGoalDate: (v: string) => void;
   setCalorieGoalMode: (v: CalorieGoalMode) => void;
   setWeightLog: (v: Record<string, number>) => void;
   setFavorites: (v: FavoriteEntry[]) => void;
@@ -269,6 +277,7 @@ export function useMacroCloudSync({
   goals,
   dailyLog,
   weightGoal,
+  weightGoalDate,
   calorieGoalMode,
   weightLog,
   favorites,
@@ -284,6 +293,7 @@ export function useMacroCloudSync({
   setGoals,
   setDailyLog,
   setWeightGoal,
+  setWeightGoalDate,
   setCalorieGoalMode,
   setWeightLog,
   setFavorites,
@@ -320,6 +330,7 @@ export function useMacroCloudSync({
     goals,
     dailyLog,
     weightGoal,
+    weightGoalDate,
     calorieGoalMode,
     weightLog,
     favorites,
@@ -339,6 +350,7 @@ export function useMacroCloudSync({
     goals,
     dailyLog,
     weightGoal,
+    weightGoalDate,
     calorieGoalMode,
     weightLog,
     favorites,
@@ -359,6 +371,7 @@ export function useMacroCloudSync({
     setGoals,
     setDailyLog,
     setWeightGoal,
+    setWeightGoalDate,
     setCalorieGoalMode,
     setWeightLog,
     setFavorites,
@@ -376,6 +389,7 @@ export function useMacroCloudSync({
     setGoals,
     setDailyLog,
     setWeightGoal,
+    setWeightGoalDate,
     setCalorieGoalMode,
     setWeightLog,
     setFavorites,
@@ -592,6 +606,7 @@ export function useMacroCloudSync({
           goals: live.goals,
           dailyLog: live.dailyLog,
           weightGoal: live.weightGoal,
+          weightGoalDate: live.weightGoalDate,
           calorieGoalMode: live.calorieGoalMode,
           weightLog: live.weightLog,
           favorites: live.favorites,
@@ -776,6 +791,7 @@ export function useMacroCloudSync({
     goals,
     dailyLog,
     weightGoal,
+    weightGoalDate,
     calorieGoalMode,
     weightLog,
     favorites,

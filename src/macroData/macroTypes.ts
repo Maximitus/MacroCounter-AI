@@ -7,6 +7,16 @@ export type MealEntry = {id: string; name: string; macros: MacroTotals};
 
 export type FavoriteEntry = {name: string; macros: MacroTotals};
 
+/** Meal-logging streak state (cheat days, fasting, vacation, meal counts). */
+export type StreakBundle = {
+  mealCountByDay: Record<string, number>;
+  cheatDays: Record<string, true>;
+  fastingDays: Record<string, true>;
+  vacationDays: Record<string, true>;
+  vacationMode: boolean;
+  cheatDaysPerWeek: number;
+};
+
 export type MacroTombstones = {
   history?: string[];
   favorites?: string[];
@@ -25,5 +35,6 @@ export type MacroDataBundle = {
   favorites: FavoriteEntry[];
   history: MealEntry[];
   lastUpdatedDate: string;
+  streak?: StreakBundle;
   tombstones?: MacroTombstones;
 };

@@ -1,7 +1,19 @@
 import {filterTodayMealHistory} from './mealHistory.ts';
 import {normalizeCalorieGoalMode} from '../macroProgress.ts';
+import {
+  DEFAULT_CHEAT_DAYS_PER_WEEK,
+  emptyStreakBundle,
+  normalizeStreakBundle,
+} from '../loggingStreak.ts';
 import {normalizeTombstones} from './macroTombstones.ts';
-import type {MacroDataBundle, MacroTotals} from './macroTypes.ts';
+import type {MacroDataBundle, MacroTotals, StreakBundle} from './macroTypes.ts';
+
+export const STORAGE_MEAL_COUNT_BY_DAY = 'macrocounter_meal_count_by_day_v1';
+export const STORAGE_STREAK_CHEAT_DAYS = 'macrocounter_streak_cheat_days_v1';
+export const STORAGE_STREAK_FASTING_DAYS = 'macrocounter_streak_fasting_days_v1';
+export const STORAGE_STREAK_VACATION_DAYS = 'macrocounter_streak_vacation_days_v1';
+export const STORAGE_STREAK_VACATION_MODE = 'macrocounter_streak_vacation_mode_v1';
+export const STORAGE_STREAK_CHEAT_DAYS_PER_WEEK = 'macrocounter_streak_cheat_days_per_week_v1';
 
 export const STORAGE_BUNDLE_UPDATED_AT = 'macrocounter_bundle_updated_at_v1';
 export const STORAGE_TOMBSTONES = 'macrocounter_tombstones_v1';
@@ -69,6 +81,76 @@ export function setLastSyncedBundle(uid: string, bundle: MacroDataBundle) {
   }
 }
 
+function loadJsonRecord<T extends Record<string, unknown>>(key: string): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {} as T;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as T) : ({} as T);
+  } catch {
+    return {} as T;
+  }
+}
+
+function loadStreakTrueDays(key: string): Record<string, true> {
+  const raw = loadJsonRecord<Record<string, unknown>>(key);
+  const next: Record<string, true> = {};
+  for (const k of Object.keys(raw)) {
+    if (raw[k]) next[k] = true;
+  }
+  return next;
+}
+
+export function loadStreakBundleFromStorage(): StreakBundle {
+  const mealCountRaw = loadJsonRecord<Record<string, unknown>>(STORAGE_MEAL_COUNT_BY_DAY);
+  const mealCountByDay: Record<string, number> = {};
+  for (const [k, v] of Object.entries(mealCountRaw)) {
+    const n = typeof v === 'number' ? v : parseInt(String(v), 10);
+    if (Number.isFinite(n) && n >= 0) mealCountByDay[k] = n;
+  }
+
+  let cheatDaysPerWeek = DEFAULT_CHEAT_DAYS_PER_WEEK;
+  try {
+    const raw = localStorage.getItem(STORAGE_STREAK_CHEAT_DAYS_PER_WEEK);
+    if (raw !== null) cheatDaysPerWeek = JSON.parse(raw) as number;
+  } catch {
+    /* ignore */
+  }
+
+  let vacationMode = false;
+  try {
+    vacationMode = localStorage.getItem(STORAGE_STREAK_VACATION_MODE) === 'true';
+  } catch {
+    /* ignore */
+  }
+
+  return normalizeStreakBundle({
+    mealCountByDay,
+    cheatDays: loadStreakTrueDays(STORAGE_STREAK_CHEAT_DAYS),
+    fastingDays: loadStreakTrueDays(STORAGE_STREAK_FASTING_DAYS),
+    vacationDays: loadStreakTrueDays(STORAGE_STREAK_VACATION_DAYS),
+    vacationMode,
+    cheatDaysPerWeek,
+  });
+}
+
+function saveStreakBundleToStorage(streak: StreakBundle) {
+  const normalized = normalizeStreakBundle(streak);
+  localStorage.setItem(STORAGE_MEAL_COUNT_BY_DAY, JSON.stringify(normalized.mealCountByDay));
+  localStorage.setItem(STORAGE_STREAK_CHEAT_DAYS, JSON.stringify(normalized.cheatDays));
+  localStorage.setItem(STORAGE_STREAK_FASTING_DAYS, JSON.stringify(normalized.fastingDays));
+  localStorage.setItem(STORAGE_STREAK_VACATION_DAYS, JSON.stringify(normalized.vacationDays));
+  localStorage.setItem(STORAGE_STREAK_VACATION_MODE, String(normalized.vacationMode));
+  localStorage.setItem(
+    STORAGE_STREAK_CHEAT_DAYS_PER_WEEK,
+    JSON.stringify(normalized.cheatDaysPerWeek),
+  );
+}
+
+export function persistStreakBundle(streak: StreakBundle) {
+  saveStreakBundleToStorage(streak);
+}
+
 function ceilToOneDecimal(n: number): number {
   return Math.ceil(n * 10) / 10;
 }
@@ -117,6 +199,7 @@ export function canonicalMacroBundle(bundle: MacroDataBundle): MacroDataBundle {
       favorites: [...bundle.favorites].sort((a, b) => a.name.localeCompare(b.name)),
       history: filterTodayMealHistory(bundle.history).sort((a, b) => a.id.localeCompare(b.id)),
       lastUpdatedDate: bundle.lastUpdatedDate ?? '',
+      streak: normalizeStreakBundle(bundle.streak ?? emptyStreakBundle()),
       ...(tombstones ? {tombstones} : {}),
     }),
   ) as MacroDataBundle;
@@ -153,6 +236,7 @@ export function macroBundleFingerprint(bundle: MacroDataBundle): string {
     favorites: c.favorites,
     history: c.history,
     lastUpdatedDate: c.lastUpdatedDate,
+    streak: c.streak,
   });
 }
 
@@ -262,6 +346,7 @@ export function loadLocalMacroBundleRaw(): MacroDataBundle {
     favorites,
     history,
     lastUpdatedDate,
+    streak: loadStreakBundleFromStorage(),
     tombstones,
   });
 }
@@ -278,6 +363,7 @@ export function saveLocalMacroBundle(bundle: MacroDataBundle, atMs = Date.now())
     localStorage.setItem('favorites', JSON.stringify(canonical.favorites));
     localStorage.setItem('history', JSON.stringify(canonical.history));
     localStorage.setItem('lastUpdatedDate', canonical.lastUpdatedDate);
+    saveStreakBundleToStorage(canonical.streak ?? emptyStreakBundle());
     if (canonical.tombstones) {
       localStorage.setItem(STORAGE_TOMBSTONES, JSON.stringify(canonical.tombstones));
     } else {

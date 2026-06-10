@@ -20,6 +20,7 @@ import {
   tombstonesFromFirestore,
 } from './macroTombstones.ts';
 import {filterTodayMealHistory} from './mealHistory.ts';
+import {emptyStreakBundle} from '../loggingStreak.ts';
 import {normalizeCalorieGoalMode} from '../macroProgress.ts';
 import type {
   CalorieGoalMode,
@@ -27,6 +28,7 @@ import type {
   MacroDataBundle,
   MacroTotals,
   MealEntry,
+  StreakBundle,
 } from './macroTypes.ts';
 import type {MacroSyncConflictInfo} from './MacroSyncConflictModal.tsx';
 
@@ -51,6 +53,7 @@ function emptyMacroBundle(): MacroDataBundle {
     favorites: [],
     history: [],
     lastUpdatedDate: '',
+    streak: emptyStreakBundle(),
   };
 }
 
@@ -73,6 +76,10 @@ function bundleFromSnapshot(raw: Record<string, unknown> | undefined): MacroData
     favorites: Array.isArray(raw.favorites) ? (raw.favorites as FavoriteEntry[]) : [],
     history: Array.isArray(raw.history) ? (raw.history as MealEntry[]) : [],
     lastUpdatedDate: typeof raw.lastUpdatedDate === 'string' ? raw.lastUpdatedDate : '',
+    streak:
+      raw.streak && typeof raw.streak === 'object'
+        ? (raw.streak as StreakBundle)
+        : emptyStreakBundle(),
     tombstones: tombstonesFromFirestore(raw.tombstones),
   });
 }
@@ -112,6 +119,26 @@ function remoteToBundle(remote: MacroDataBundle): MacroDataBundle {
   });
 }
 
+function applyStreakBundleToState(
+  streak: StreakBundle,
+  setters: {
+    setMealCountByDay: (v: Record<string, number>) => void;
+    setStreakCheatDays: (v: Record<string, true>) => void;
+    setStreakFastingDays: (v: Record<string, true>) => void;
+    setStreakVacationDays: (v: Record<string, true>) => void;
+    setStreakVacationMode: (v: boolean) => void;
+    setCheatDaysPerWeek: (v: number) => void;
+  },
+) {
+  const s = streak ?? emptyStreakBundle();
+  setters.setMealCountByDay({...s.mealCountByDay});
+  setters.setStreakCheatDays({...s.cheatDays});
+  setters.setStreakFastingDays({...s.fastingDays});
+  setters.setStreakVacationDays({...s.vacationDays});
+  setters.setStreakVacationMode(s.vacationMode);
+  setters.setCheatDaysPerWeek(s.cheatDaysPerWeek);
+}
+
 function applyBundleToState(
   bundle: MacroDataBundle,
   setters: {
@@ -124,6 +151,12 @@ function applyBundleToState(
     setFavorites: (v: FavoriteEntry[]) => void;
     setHistory: (v: MealEntry[]) => void;
     setLastUpdatedDate: (v: string) => void;
+    setMealCountByDay: (v: Record<string, number>) => void;
+    setStreakCheatDays: (v: Record<string, true>) => void;
+    setStreakFastingDays: (v: Record<string, true>) => void;
+    setStreakVacationDays: (v: Record<string, true>) => void;
+    setStreakVacationMode: (v: boolean) => void;
+    setCheatDaysPerWeek: (v: number) => void;
   },
   flags: {applyingRemote: {current: boolean}; suppressDirty: {current: boolean}},
 ) {
@@ -138,6 +171,7 @@ function applyBundleToState(
   setters.setFavorites(bundle.favorites);
   setters.setHistory(filterTodayMealHistory(bundle.history));
   if (bundle.lastUpdatedDate) setters.setLastUpdatedDate(bundle.lastUpdatedDate);
+  applyStreakBundleToState(bundle.streak ?? emptyStreakBundle(), setters);
   flags.applyingRemote.current = false;
 }
 
@@ -154,6 +188,7 @@ async function writeBundleToCloud(uid: string, bundle: MacroDataBundle) {
     favorites: canonical.favorites,
     history: canonical.history,
     lastUpdatedDate: canonical.lastUpdatedDate,
+    streak: canonical.streak ?? emptyStreakBundle(),
     updatedAt: serverTimestamp(),
   };
   if (canonical.tombstones) payload.tombstones = canonical.tombstones;
@@ -204,6 +239,12 @@ export type MacroCloudSyncProps = {
   favorites: FavoriteEntry[];
   history: MealEntry[];
   lastUpdatedDate: string;
+  mealCountByDay: Record<string, number>;
+  streakCheatDays: Record<string, true>;
+  streakFastingDays: Record<string, true>;
+  streakVacationDays: Record<string, true>;
+  streakVacationMode: boolean;
+  cheatDaysPerWeek: number;
   setMacros: (v: MacroTotals) => void;
   setGoals: (v: MacroTotals) => void;
   setDailyLog: (v: Record<string, MacroTotals>) => void;
@@ -213,6 +254,12 @@ export type MacroCloudSyncProps = {
   setFavorites: (v: FavoriteEntry[]) => void;
   setHistory: (v: MealEntry[]) => void;
   setLastUpdatedDate: (v: string) => void;
+  setMealCountByDay: (v: Record<string, number>) => void;
+  setStreakCheatDays: (v: Record<string, true>) => void;
+  setStreakFastingDays: (v: Record<string, true>) => void;
+  setStreakVacationDays: (v: Record<string, true>) => void;
+  setStreakVacationMode: (v: boolean) => void;
+  setCheatDaysPerWeek: (v: number) => void;
 };
 
 export function useMacroCloudSync({
@@ -227,6 +274,12 @@ export function useMacroCloudSync({
   favorites,
   history,
   lastUpdatedDate,
+  mealCountByDay,
+  streakCheatDays,
+  streakFastingDays,
+  streakVacationDays,
+  streakVacationMode,
+  cheatDaysPerWeek,
   setMacros,
   setGoals,
   setDailyLog,
@@ -236,6 +289,12 @@ export function useMacroCloudSync({
   setFavorites,
   setHistory,
   setLastUpdatedDate,
+  setMealCountByDay,
+  setStreakCheatDays,
+  setStreakFastingDays,
+  setStreakVacationDays,
+  setStreakVacationMode,
+  setCheatDaysPerWeek,
 }: MacroCloudSyncProps) {
   const [syncing, setSyncing] = useState(false);
   const [ready, setReady] = useState(false);
@@ -266,6 +325,14 @@ export function useMacroCloudSync({
     favorites,
     history,
     lastUpdatedDate,
+    streak: {
+      mealCountByDay,
+      cheatDays: streakCheatDays,
+      fastingDays: streakFastingDays,
+      vacationDays: streakVacationDays,
+      vacationMode: streakVacationMode,
+      cheatDaysPerWeek,
+    },
   });
   bundleRef.current = {
     macros,
@@ -277,6 +344,14 @@ export function useMacroCloudSync({
     favorites,
     history,
     lastUpdatedDate,
+    streak: {
+      mealCountByDay,
+      cheatDays: streakCheatDays,
+      fastingDays: streakFastingDays,
+      vacationDays: streakVacationDays,
+      vacationMode: streakVacationMode,
+      cheatDaysPerWeek,
+    },
   };
 
   const settersRef = useRef({
@@ -289,6 +364,12 @@ export function useMacroCloudSync({
     setFavorites,
     setHistory,
     setLastUpdatedDate,
+    setMealCountByDay,
+    setStreakCheatDays,
+    setStreakFastingDays,
+    setStreakVacationDays,
+    setStreakVacationMode,
+    setCheatDaysPerWeek,
   });
   settersRef.current = {
     setMacros,
@@ -300,6 +381,12 @@ export function useMacroCloudSync({
     setFavorites,
     setHistory,
     setLastUpdatedDate,
+    setMealCountByDay,
+    setStreakCheatDays,
+    setStreakFastingDays,
+    setStreakVacationDays,
+    setStreakVacationMode,
+    setCheatDaysPerWeek,
   };
 
   const applyFlags = useRef({applyingRemote, suppressDirty});
@@ -510,6 +597,7 @@ export function useMacroCloudSync({
           favorites: live.favorites,
           history: live.history,
           lastUpdatedDate: live.lastUpdatedDate,
+          streak: live.streak,
           tombstones: localFromStorage.tombstones,
         });
         const localUpdatedMs = getLocalBundleUpdatedAtMs();
@@ -693,6 +781,12 @@ export function useMacroCloudSync({
     favorites,
     history,
     lastUpdatedDate,
+    mealCountByDay,
+    streakCheatDays,
+    streakFastingDays,
+    streakVacationDays,
+    streakVacationMode,
+    cheatDaysPerWeek,
   ]);
 
   return {cloudEnabled, syncing, ready, syncConflict, resolvingConflict, resolveSyncConflict};

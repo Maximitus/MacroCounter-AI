@@ -46,11 +46,22 @@ import {
 } from './aiPrompts';
 import {AiChatScreen} from './AiChatScreen.tsx';
 import {CalorieGoalModePill} from './CalorieGoalModePill.tsx';
+import {LoggingStreakCard} from './LoggingStreakCard.tsx';
+import {LoggingStreakModal} from './LoggingStreakModal.tsx';
+import {
+  computeLoggingStreak,
+  normalizeCheatDaysPerWeek,
+  normalizeStreakBundle,
+  streakBundleToDayFlags,
+} from './loggingStreak.ts';
+import {assessGoalHealth, calorieGoalModeFromWeightDelta} from './goalHealth.ts';
+import {UnhealthyGoalWarningModal} from './UnhealthyGoalWarningModal.tsx';
 import {recentDailyTotalsFromLog} from './aiCoachContext';
 import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
 import {MacroCloudSyncProvider} from './macroData/MacroCloudSyncContext.tsx';
 import {useMacroCloudSync} from './macroData/useMacroCloudSync.ts';
+import {loadStreakBundleFromStorage, persistStreakBundle} from './macroData/macroLocalPersistence.ts';
 import type {CalorieGoalMode} from './macroData/macroTypes.ts';
 import {filterTodayMealHistory} from './macroData/mealHistory.ts';
 import {
@@ -843,6 +854,7 @@ function saveShowWeightSection(show: boolean) {
 }
 
 export default function App() {
+  const initialStreak = loadStreakBundleFromStorage();
   const navigate = useNavigate();
   const location = useLocation();
   const {user, loading: authLoading} = useAuth();
@@ -917,11 +929,23 @@ export default function App() {
     goals: typeof goals;
     weightGoal: number;
     calorieGoalMode: CalorieGoalMode;
+    cheatDaysPerWeek: number;
   } | null>(null);
   /** Raw text while editing weight goal in Set goals modal (decimals like "165.") */
   const [weightGoalFieldDraft, setWeightGoalFieldDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [goalsAiLoading, setGoalsAiLoading] = useState(false);
+  const [goalHealthWarning, setGoalHealthWarning] = useState<{
+    concerns: string[];
+    onConfirm: () => void;
+  } | null>(null);
+  const [streakOpen, setStreakOpen] = useState(false);
+  const [mealCountByDay, setMealCountByDay] = useState(initialStreak.mealCountByDay);
+  const [streakCheatDays, setStreakCheatDays] = useState(initialStreak.cheatDays);
+  const [streakFastingDays, setStreakFastingDays] = useState(initialStreak.fastingDays);
+  const [streakVacationDays, setStreakVacationDays] = useState(initialStreak.vacationDays);
+  const [streakVacationMode, setStreakVacationMode] = useState(initialStreak.vacationMode);
+  const [cheatDaysPerWeek, setCheatDaysPerWeek] = useState(initialStreak.cheatDaysPerWeek);
   const [analysis, setAnalysis] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [describeOpen, setDescribeOpen] = useState(false);
@@ -1003,6 +1027,12 @@ export default function App() {
     favorites,
     history,
     lastUpdatedDate,
+    mealCountByDay,
+    streakCheatDays,
+    streakFastingDays,
+    streakVacationDays,
+    streakVacationMode,
+    cheatDaysPerWeek,
     setMacros,
     setGoals,
     setDailyLog,
@@ -1012,6 +1042,12 @@ export default function App() {
     setFavorites,
     setHistory,
     setLastUpdatedDate,
+    setMealCountByDay,
+    setStreakCheatDays,
+    setStreakFastingDays,
+    setStreakVacationDays,
+    setStreakVacationMode,
+    setCheatDaysPerWeek,
   });
 
   usePublishCalorieStreak(user, dailyLog, goals.calories, macros);
@@ -1085,6 +1121,11 @@ export default function App() {
             return next;
           });
         }
+        setMealCountByDay((prev) => {
+          const count = history.length;
+          if (prev[prevKey] === count) return prev;
+          return {...prev, [prevKey]: count};
+        });
       }
       setMacros({ calories: 0, protein: 0, carbs: 0, fat: 0 });
       setHistory([]);
@@ -1114,6 +1155,43 @@ export default function App() {
     localStorage.setItem('calorieGoalMode', calorieGoalMode);
   }, [weightLog, weightGoal, calorieGoalMode]);
 
+  const streakBundle = useMemo(
+    () =>
+      normalizeStreakBundle({
+        mealCountByDay,
+        cheatDays: streakCheatDays,
+        fastingDays: streakFastingDays,
+        vacationDays: streakVacationDays,
+        vacationMode: streakVacationMode,
+        cheatDaysPerWeek,
+      }),
+    [
+      mealCountByDay,
+      streakCheatDays,
+      streakFastingDays,
+      streakVacationDays,
+      streakVacationMode,
+      cheatDaysPerWeek,
+    ],
+  );
+
+  useEffect(() => {
+    persistStreakBundle(streakBundle);
+  }, [streakBundle]);
+
+  useEffect(() => {
+    const key = getTodayKey();
+    setMealCountByDay((prev) =>
+      prev[key] === history.length ? prev : {...prev, [key]: history.length},
+    );
+  }, [history]);
+
+  useEffect(() => {
+    if (!streakVacationMode) return;
+    const key = getTodayKey();
+    setStreakVacationDays((prev) => (prev[key] ? prev : {...prev, [key]: true}));
+  }, [streakVacationMode, lastUpdatedDate]);
+
   useEffect(() => {
     if (!syncConflict) return;
     const prev = document.body.style.overflow;
@@ -1125,12 +1203,35 @@ export default function App() {
 
   useEffect(() => {
     if (isGoalsModalOpen) {
-      setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode});
+      setGoalsModalBaseline({
+        goals: {...goals},
+        weightGoal,
+        calorieGoalMode,
+        cheatDaysPerWeek,
+      });
       setWeightGoalFieldDraft(null);
     } else {
       setGoalsModalBaseline(null);
     }
   }, [isGoalsModalOpen]);
+
+  const streakFlags = useMemo(
+    () => streakBundleToDayFlags(streakBundle),
+    [streakBundle],
+  );
+
+  const loggingStreakSnapshot = useMemo(
+    () =>
+      computeLoggingStreak({
+        todayKey: getTodayKey(),
+        todayMealCount: history.length,
+        mealCountByDay,
+        dailyLog,
+        flags: streakFlags,
+        cheatDaysPerWeek,
+      }),
+    [history.length, mealCountByDay, dailyLog, streakFlags, cheatDaysPerWeek],
+  );
 
   const goalsModalDirty = useMemo(() => {
     if (!isGoalsModalOpen || !goalsModalBaseline) return false;
@@ -1140,13 +1241,114 @@ export default function App() {
       goals.carbs !== goalsModalBaseline.goals.carbs ||
       goals.fat !== goalsModalBaseline.goals.fat ||
       weightGoal !== goalsModalBaseline.weightGoal ||
-      calorieGoalMode !== goalsModalBaseline.calorieGoalMode
+      calorieGoalMode !== goalsModalBaseline.calorieGoalMode ||
+      cheatDaysPerWeek !== goalsModalBaseline.cheatDaysPerWeek
     );
-  }, [isGoalsModalOpen, goalsModalBaseline, goals, weightGoal, calorieGoalMode]);
+  }, [isGoalsModalOpen, goalsModalBaseline, goals, weightGoal, calorieGoalMode, cheatDaysPerWeek]);
+
+  const applyAiGeneratedGoals = (result: Record<string, unknown>) => {
+    const nextGoals = normalizeAiMacros(result);
+    const cw = parseOptionalAiWeightLb(result.currentWeightLb);
+    const tw = parseOptionalAiWeightLb(result.targetWeightLb);
+    let nextWeightGoal = weightGoal;
+    let nextCalorieGoalMode = calorieGoalMode;
+
+    if (cw != null) {
+      markLocalProfileWeightPush(cw);
+      setWeightLog((prev) => ({
+        ...prev,
+        [getTodayKey()]: cw,
+      }));
+      if (socialEnabled && user) {
+        void saveBodyWeightLb(cw).catch((e) =>
+          console.error('Could not sync weight to profile', e),
+        );
+      }
+    }
+
+    if (tw != null) {
+      nextWeightGoal = tw;
+      setWeightGoal(tw);
+      const currentForMode = cw ?? getLatestWeight(weightLog);
+      const derivedMode = calorieGoalModeFromWeightDelta(currentForMode, tw);
+      if (derivedMode) {
+        nextCalorieGoalMode = derivedMode;
+        setCalorieGoalMode(derivedMode);
+      }
+    } else if (result.calorieGoalMode != null) {
+      nextCalorieGoalMode = normalizeCalorieGoalMode(result.calorieGoalMode);
+      setCalorieGoalMode(nextCalorieGoalMode);
+    }
+
+    setGoals(nextGoals);
+
+    const parts = ['Daily goals updated via AI.'];
+    if (cw != null) {
+      parts.push(`Logged current weight (${formatMacroAmount(cw)} lb).`);
+    }
+    if (tw != null) {
+      parts.push(`Set goal weight (${formatMacroAmount(tw)} lb).`);
+    } else if (result.calorieGoalMode != null) {
+      parts.push(
+        `Calorie goal: ${calorieGoalModeLabel(normalizeCalorieGoalMode(result.calorieGoalMode))}.`,
+      );
+    }
+    toast.success(parts.join(' '));
+  };
+
+  const confirmAiGeneratedGoals = (result: Record<string, unknown>) => {
+    const nextGoals = normalizeAiMacros(result);
+    const cw = parseOptionalAiWeightLb(result.currentWeightLb);
+    const tw = parseOptionalAiWeightLb(result.targetWeightLb);
+    let nextWeightGoal = tw ?? weightGoal;
+    let nextCalorieGoalMode = calorieGoalMode;
+
+    if (tw != null) {
+      const currentForMode = cw ?? getLatestWeight(weightLog);
+      const derivedMode = calorieGoalModeFromWeightDelta(currentForMode, tw);
+      if (derivedMode) nextCalorieGoalMode = derivedMode;
+    } else if (result.calorieGoalMode != null) {
+      nextCalorieGoalMode = normalizeCalorieGoalMode(result.calorieGoalMode);
+    }
+
+    const concerns = assessGoalHealth({
+      goals: nextGoals,
+      weightGoal: nextWeightGoal,
+      currentWeightLb: cw ?? getLatestWeight(weightLog),
+      calorieGoalMode: nextCalorieGoalMode,
+    });
+
+    if (concerns.length === 0) {
+      applyAiGeneratedGoals(result);
+      return;
+    }
+
+    setGoalHealthWarning({
+      concerns,
+      onConfirm: () => {
+        applyAiGeneratedGoals(result);
+        setGoalHealthWarning(null);
+      },
+    });
+  };
 
   const saveGoalsModal = () => {
-    setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode});
-    toast.success('Daily goals saved');
+    const concerns = assessGoalHealth({
+      goals,
+      weightGoal,
+      currentWeightLb: getLatestWeight(weightLog),
+      calorieGoalMode,
+    });
+    const commit = () => {
+      setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode, cheatDaysPerWeek});
+      toast.success('Daily goals saved');
+      setGoalHealthWarning(null);
+    };
+    if (concerns.length === 0) {
+      commit();
+      return;
+    }
+    setGoalHealthWarning({concerns, onConfirm: commit});
   };
 
   const closeGoalsModal = () => {
@@ -1154,9 +1356,82 @@ export default function App() {
       setGoals({...goalsModalBaseline.goals});
       setWeightGoal(goalsModalBaseline.weightGoal);
       setCalorieGoalMode(goalsModalBaseline.calorieGoalMode);
+      setCheatDaysPerWeek(goalsModalBaseline.cheatDaysPerWeek);
     }
     setWeightGoalFieldDraft(null);
     setIsGoalsModalOpen(false);
+  };
+
+  const setFastingToday = (enabled: boolean) => {
+    const key = getTodayKey();
+    if (enabled) {
+      setStreakFastingDays((prev) => ({...prev, [key]: true}));
+      setStreakCheatDays((prev) => {
+        if (!prev[key]) return prev;
+        const next = {...prev};
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    setStreakFastingDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
+  };
+
+  const setVacationMode = (enabled: boolean) => {
+    const key = getTodayKey();
+    setStreakVacationMode(enabled);
+    if (enabled) {
+      setStreakVacationDays((prev) => ({...prev, [key]: true}));
+      return;
+    }
+    setStreakVacationDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
+  };
+
+  const setCheatDayToday = (enabled: boolean) => {
+    const key = getTodayKey();
+    if (!enabled) {
+      setStreakCheatDays((prev) => {
+        if (!prev[key]) return prev;
+        const next = {...prev};
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    if (history.length > 0 || !loggingStreakSnapshot.canUseCheatDayToday) return;
+    setStreakCheatDays((prev) => ({...prev, [key]: true}));
+    setStreakFastingDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
+  };
+
+  const clearTodayEphemeralStreakFlags = () => {
+    const key = getTodayKey();
+    setStreakFastingDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
+    setStreakCheatDays((prev) => {
+      if (!prev[key]) return prev;
+      const next = {...prev};
+      delete next[key];
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -1178,7 +1453,8 @@ export default function App() {
       manualEntryOpen ||
       aiReview ||
       addMealChooserOpen ||
-      snackOpen
+      snackOpen ||
+      streakOpen
     ) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -1196,6 +1472,7 @@ export default function App() {
     aiReview,
     addMealChooserOpen,
     snackOpen,
+    streakOpen,
   ]);
 
   const macroInputValue = (key: ManualMacroKey) =>
@@ -1227,6 +1504,7 @@ export default function App() {
       fat: prev.fat + macrosToAdd.fat,
     }));
     setHistory(prev => [...prev, {id: Date.now().toString(), name, macros: macrosToAdd}]);
+    clearTodayEphemeralStreakFlags();
     toast.success(`Added ${name} to daily log`);
   };
 
@@ -1637,6 +1915,11 @@ export default function App() {
           })()}
         </section>
 
+        <LoggingStreakCard
+          snapshot={loggingStreakSnapshot}
+          onOpen={() => setStreakOpen(true)}
+        />
+
         <section className="glass p-6 rounded-2xl border border-[var(--color-accent)]/10 shadow-lg accent-glow relative z-20">
           <h2 className="text-xl font-semibold mb-6 text-fg brand-font">Meal History</h2>
           <div className="space-y-2">
@@ -1769,12 +2052,14 @@ export default function App() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="relative space-y-3">
-              {loading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--color-bg-dark)]/70">
+            <div className="space-y-3">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] py-10">
                   <Loader2 className="h-10 w-10 animate-spin text-[var(--color-accent)]" aria-hidden />
+                  <span className="text-sm text-[var(--color-text-light)]">Analyzing meal…</span>
                 </div>
-              )}
+              ) : (
+                <>
               <label htmlFor="meal-description" className="sr-only">
                 Meal description
               </label>
@@ -1787,15 +2072,13 @@ export default function App() {
                 placeholder="e.g. chicken salad, large"
                 value={textDescription}
                 onChange={(e) => setTextDescription(e.target.value)}
-                disabled={loading}
-                className="box-border w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)] disabled:opacity-60"
+                className="box-border w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-3.5 text-base text-fg placeholder:text-[var(--color-text-light)]"
               />
               <div className="flex items-stretch gap-2">
                 <button
                   type="button"
-                  className="flex h-12 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-panel-hover)] hover:text-fg disabled:opacity-60"
+                  className="flex h-12 w-10 shrink-0 items-center justify-center rounded-full text-[var(--color-text-light)] transition hover:bg-[var(--color-panel-hover)] hover:text-fg"
                   onClick={() => galleryInputRef.current?.click()}
-                  disabled={loading}
                   aria-label="Choose from photos"
                 >
                   <Plus className="h-5 w-5" aria-hidden />
@@ -1804,11 +2087,13 @@ export default function App() {
                   type="button"
                   className="min-w-0 flex-1 rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
                   onClick={() => void handleTextAnalysis()}
-                  disabled={loading || !textDescription.trim()}
+                  disabled={!textDescription.trim()}
                 >
                   Analyze
                 </button>
               </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2434,12 +2719,13 @@ export default function App() {
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       placeholder="e.g., I want to lose weight, I am 180lbs and 6ft tall."
-                      className="mb-2 w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] p-3 text-fg"
-                      rows={2}
+                      className="mb-2 w-full resize-none rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface-deep)] p-3 text-fg"
+                      rows={3}
                     />
                     <button 
                       type="button"
-                      className="w-full rounded-full bg-[var(--color-surface-deep)] py-2 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] py-3.5 text-base font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+                      disabled={!aiPrompt.trim()}
                       onClick={async () => {
                         setGoalsAiLoading(true);
                         try {
@@ -2451,40 +2737,7 @@ export default function App() {
                             ],
                           });
                           const result = JSON.parse(text) as Record<string, unknown>;
-                          setGoals(normalizeAiMacros(result));
-                          const cw = parseOptionalAiWeightLb(result.currentWeightLb);
-                          const tw = parseOptionalAiWeightLb(result.targetWeightLb);
-                          if (cw != null) {
-                            markLocalProfileWeightPush(cw);
-                            setWeightLog((prev) => ({
-                              ...prev,
-                              [getTodayKey()]: cw,
-                            }));
-                            if (socialEnabled && user) {
-                              void saveBodyWeightLb(cw).catch((e) =>
-                                console.error('Could not sync weight to profile', e),
-                              );
-                            }
-                          }
-                          if (tw != null) {
-                            setWeightGoal(tw);
-                          }
-                          if (result.calorieGoalMode != null) {
-                            setCalorieGoalMode(normalizeCalorieGoalMode(result.calorieGoalMode));
-                          }
-                          const parts = ['Daily goals updated via AI.'];
-                          if (cw != null) {
-                            parts.push(`Logged current weight (${formatMacroAmount(cw)} lb).`);
-                          }
-                          if (tw != null) {
-                            parts.push(`Set goal weight (${formatMacroAmount(tw)} lb).`);
-                          }
-                          if (result.calorieGoalMode != null) {
-                            parts.push(
-                              `Calorie goal: ${calorieGoalModeLabel(normalizeCalorieGoalMode(result.calorieGoalMode))}.`,
-                            );
-                          }
-                          toast.success(parts.join(' '));
+                          confirmAiGeneratedGoals(result);
                         } catch (error) {
                           console.error("Error generating goals:", error);
                           toastAiConfigError(error, 'Could not generate goals.');
@@ -2493,7 +2746,8 @@ export default function App() {
                         }
                       }}
                     >
-                      Generate Goals with AI
+                      <Sparkles className="h-4 w-4" aria-hidden />
+                      Generate goals with AI
                     </button>
                   </>
                 )}
@@ -2501,10 +2755,12 @@ export default function App() {
               <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
                 <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Daily goals</h3>
                 <div className="space-y-4">
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-[var(--color-text-light)]">Calorie goal</p>
-                    <CalorieGoalModePill value={calorieGoalMode} onChange={setCalorieGoalMode} />
-                  </div>
+                  {weightGoal <= 0 ? (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-[var(--color-text-light)]">Calorie goal</p>
+                      <CalorieGoalModePill value={calorieGoalMode} onChange={setCalorieGoalMode} />
+                    </div>
+                  ) : null}
                   <div>
                     <label
                       htmlFor="goal-weight"
@@ -2531,7 +2787,11 @@ export default function App() {
                           onChange={(e) => {
                             const s = sanitizeMacroAmountRaw(e.target.value);
                             setWeightGoalFieldDraft(s);
-                            setWeightGoal(weightToLb(parseMacroAmountInput(s), profileWeightUnit));
+                            const nextGoalLb = weightToLb(parseMacroAmountInput(s), profileWeightUnit);
+                            setWeightGoal(nextGoalLb);
+                            const latest = getLatestWeight(weightLog);
+                            const derivedMode = calorieGoalModeFromWeightDelta(latest, nextGoalLb);
+                            if (derivedMode) setCalorieGoalMode(derivedMode);
                           }}
                           onBlur={() => setWeightGoalFieldDraft(null)}
                           className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm tabular-nums text-fg outline-none"
@@ -2572,6 +2832,33 @@ export default function App() {
                         [key]: parseGoalIntInput(raw),
                       }))
                     }
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Logging streak</h3>
+                <div>
+                  <label
+                    htmlFor="cheat-days-per-week"
+                    className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
+                  >
+                    Cheat days per week
+                  </label>
+                  <p className="mb-2 text-xs text-[var(--color-text-light)]">
+                    Skip logging on a day without breaking your streak. Resets each calendar week.
+                  </p>
+                  <input
+                    id="cheat-days-per-week"
+                    name="cheat_days_per_week"
+                    type="number"
+                    min={0}
+                    max={7}
+                    step={1}
+                    value={cheatDaysPerWeek}
+                    onChange={(e) =>
+                      setCheatDaysPerWeek(normalizeCheatDaysPerWeek(e.target.value))
+                    }
+                    className="w-full rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] px-3 py-2.5 text-sm tabular-nums text-fg"
                   />
                 </div>
               </div>
@@ -2697,6 +2984,23 @@ export default function App() {
         onClose={() => setProfileOpen(false)}
         showSocialOnOverview={showSocialOnOverview}
         onShowSocialOnOverviewChange={setShowSocialOnOverview}
+      />
+
+      {goalHealthWarning ? (
+        <UnhealthyGoalWarningModal
+          concerns={goalHealthWarning.concerns}
+          onConfirm={goalHealthWarning.onConfirm}
+          onCancel={() => setGoalHealthWarning(null)}
+        />
+      ) : null}
+
+      <LoggingStreakModal
+        open={streakOpen}
+        snapshot={loggingStreakSnapshot}
+        onClose={() => setStreakOpen(false)}
+        onSetFasting={setFastingToday}
+        onSetVacation={setVacationMode}
+        onSetCheatDay={setCheatDayToday}
       />
 
       {coachOpen ? (

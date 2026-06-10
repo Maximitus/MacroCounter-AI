@@ -1,6 +1,7 @@
 import {canonicalMacroBundle, macroBundleFingerprint} from './macroLocalPersistence.ts';
+import {emptyStreakBundle, normalizeStreakBundle} from '../loggingStreak.ts';
 import {favoriteKey, mergeTombstones, tombstoneLookup} from './macroTombstones.ts';
-import type {FavoriteEntry, MacroDataBundle, MacroTotals, MealEntry} from './macroTypes.ts';
+import type {FavoriteEntry, MacroDataBundle, MacroTotals, MealEntry, StreakBundle} from './macroTypes.ts';
 
 export type MergeMacroBundlesInput = {
   local: MacroDataBundle;
@@ -128,6 +129,61 @@ function mergeFavorites(
   return merged.map(fromKeyed);
 }
 
+function mergeStreakBundle(
+  localStreak: StreakBundle,
+  remoteStreak: StreakBundle,
+  baselineStreak: StreakBundle,
+  localMs: number,
+  remoteMs: number,
+): StreakBundle {
+  return {
+    mealCountByDay: mergeStringKeyedRecords(
+      localStreak.mealCountByDay,
+      remoteStreak.mealCountByDay,
+      baselineStreak.mealCountByDay,
+      localMs,
+      remoteMs,
+      new Set(),
+    ),
+    cheatDays: mergeStringKeyedRecords(
+      localStreak.cheatDays,
+      remoteStreak.cheatDays,
+      baselineStreak.cheatDays,
+      localMs,
+      remoteMs,
+      new Set(),
+    ),
+    fastingDays: mergeStringKeyedRecords(
+      localStreak.fastingDays,
+      remoteStreak.fastingDays,
+      baselineStreak.fastingDays,
+      localMs,
+      remoteMs,
+      new Set(),
+    ),
+    vacationDays: mergeStringKeyedRecords(
+      localStreak.vacationDays,
+      remoteStreak.vacationDays,
+      baselineStreak.vacationDays,
+      localMs,
+      remoteMs,
+      new Set(),
+    ),
+    vacationMode: pickNewer(
+      localStreak.vacationMode,
+      remoteStreak.vacationMode,
+      localMs,
+      remoteMs,
+    ),
+    cheatDaysPerWeek: pickNewer(
+      localStreak.cheatDaysPerWeek,
+      remoteStreak.cheatDaysPerWeek,
+      localMs,
+      remoteMs,
+    ),
+  };
+}
+
 function mergeMealHistory(
   localHistory: MealEntry[],
   remoteHistory: MealEntry[],
@@ -207,6 +263,13 @@ export function mergeMacroBundles({
     lastUpdatedDate: pickNewer(
       localCanon.lastUpdatedDate,
       remoteCanon.lastUpdatedDate,
+      localUpdatedMs,
+      remoteUpdatedMs,
+    ),
+    streak: mergeStreakBundle(
+      localCanon.streak ?? emptyStreakBundle(),
+      remoteCanon.streak ?? emptyStreakBundle(),
+      baselineCanon?.streak ?? emptyStreakBundle(),
       localUpdatedMs,
       remoteUpdatedMs,
     ),

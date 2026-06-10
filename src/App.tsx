@@ -156,56 +156,6 @@ function MacroInputGrid({
   );
 }
 
-function MacroGoalLegend({
-  className,
-  macroKey,
-  calorieGoalMode,
-}: {
-  className?: string;
-  macroKey?: MacroKey;
-  calorieGoalMode?: CalorieGoalMode;
-}) {
-  const metColor = macroKey ? MACRO_RING_COLORS[macroKey] : undefined;
-  const metChevron =
-    macroKey && calorieGoalMode
-      ? macroIndicatorChevron(macroKey, calorieGoalMode, 'met')
-      : 'up';
-  const unmetChevron =
-    macroKey && calorieGoalMode
-      ? macroIndicatorChevron(macroKey, calorieGoalMode, 'unmet')
-      : 'down';
-  const MetIcon = metChevron === 'up' ? ChevronUp : ChevronDown;
-  const UnmetIcon = unmetChevron === 'up' ? ChevronUp : ChevronDown;
-  const metLabel =
-    macroKey && calorieGoalMode
-      ? macroGoalMetLegendLabel(macroKey, calorieGoalMode)
-      : 'Met goal (macro color)';
-  const unmetLabel =
-    macroKey && calorieGoalMode
-      ? macroGoalUnmetLegendLabel(macroKey, calorieGoalMode)
-      : 'Did not meet goal';
-
-  return (
-    <div
-      className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-light)] ${className ?? ''}`}
-    >
-      <span className="flex items-center gap-1">
-        <MetIcon
-          className="h-3.5 w-3.5 shrink-0"
-          style={metColor ? {color: metColor} : {color: 'var(--color-accent)'}}
-          strokeWidth={3}
-          aria-hidden
-        />
-        {metLabel}
-      </span>
-      <span className="flex items-center gap-1">
-        <UnmetIcon className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={3} aria-hidden />
-        {unmetLabel}
-      </span>
-    </div>
-  );
-}
-
 function MacroProgressWheel({
   macroKey,
   current,
@@ -337,6 +287,10 @@ function MacroCalendar({
   };
 
   const macroColor = MACRO_RING_COLORS[selectedMacro];
+  const metChevron = macroIndicatorChevron(selectedMacro, calorieGoalMode, 'met');
+  const unmetChevron = macroIndicatorChevron(selectedMacro, calorieGoalMode, 'unmet');
+  const MetLegendIcon = metChevron === 'up' ? ChevronUp : ChevronDown;
+  const UnmetLegendIcon = unmetChevron === 'up' ? ChevronUp : ChevronDown;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -444,11 +398,21 @@ function MacroCalendar({
           })}
         </div>
 
-        <MacroGoalLegend
-          className="mt-4"
-          macroKey={selectedMacro}
-          calorieGoalMode={calorieGoalMode}
-        />
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-light)]">
+          <span className="flex items-center gap-1">
+            <MetLegendIcon
+              className="h-3.5 w-3.5 shrink-0"
+              style={{color: macroColor}}
+              strokeWidth={3}
+              aria-hidden
+            />
+            {macroGoalMetLegendLabel(selectedMacro, calorieGoalMode)}
+          </span>
+          <span className="flex items-center gap-1">
+            <UnmetLegendIcon className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={3} aria-hidden />
+            {macroGoalUnmetLegendLabel(selectedMacro, calorieGoalMode)}
+          </span>
+        </div>
       </div>
     </div>
   );

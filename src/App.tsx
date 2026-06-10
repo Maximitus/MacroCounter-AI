@@ -45,6 +45,7 @@ import {
   promptSnackFromIngredients,
 } from './aiPrompts';
 import {AiChatScreen} from './AiChatScreen.tsx';
+import {CalorieGoalModePill} from './CalorieGoalModePill.tsx';
 import {recentDailyTotalsFromLog} from './aiCoachContext';
 import { generateContentJson } from './geminiBridge';
 import {useAuth} from './auth/AuthContext.tsx';
@@ -57,8 +58,11 @@ import {
   MACRO_RING_COLORS,
   macroDayIndicator,
   macroGoalFieldLabel,
+  macroGoalMet,
+  macroGoalMetLegendLabel,
+  macroGoalUnmetLegendLabel,
+  macroIndicatorChevron,
   macroRingColor,
-  macroRingStatus,
   normalizeCalorieGoalMode,
   type MacroKey,
 } from './macroProgress.ts';
@@ -71,6 +75,8 @@ import {SocialOverviewSection} from './social/SocialOverviewSection.tsx';
 import {profileAiSnapshot} from './social/profileAiContext.ts';
 import {useApplyProfileBodyWeight} from './social/useApplyProfileBodyWeight.ts';
 import {resolveProfileWeightUnit} from './social/profileBody.ts';
+import {ProfileUnitSelect} from './social/ProfileUnitSelect.tsx';
+import type {ProfileWeightUnit} from './social/socialTypes.ts';
 import {useSocial} from './social/SocialContext.tsx';
 import {usePublishCalorieStreak} from './social/usePublishCalorieStreak.ts';
 import {
@@ -98,6 +104,11 @@ const MANUAL_MACRO_UNITS: Record<ManualMacroKey, string> = {
   carbs: 'g',
   fat: 'g',
 };
+
+const WEIGHT_UNIT_OPTIONS: {value: ProfileWeightUnit; label: string}[] = [
+  {value: 'lb', label: 'lb'},
+  {value: 'kg', label: 'kg'},
+];
 
 function MacroInputGrid({
   idPrefix,
@@ -145,6 +156,56 @@ function MacroInputGrid({
   );
 }
 
+function MacroGoalLegend({
+  className,
+  macroKey,
+  calorieGoalMode,
+}: {
+  className?: string;
+  macroKey?: MacroKey;
+  calorieGoalMode?: CalorieGoalMode;
+}) {
+  const metColor = macroKey ? MACRO_RING_COLORS[macroKey] : undefined;
+  const metChevron =
+    macroKey && calorieGoalMode
+      ? macroIndicatorChevron(macroKey, calorieGoalMode, 'met')
+      : 'up';
+  const unmetChevron =
+    macroKey && calorieGoalMode
+      ? macroIndicatorChevron(macroKey, calorieGoalMode, 'unmet')
+      : 'down';
+  const MetIcon = metChevron === 'up' ? ChevronUp : ChevronDown;
+  const UnmetIcon = unmetChevron === 'up' ? ChevronUp : ChevronDown;
+  const metLabel =
+    macroKey && calorieGoalMode
+      ? macroGoalMetLegendLabel(macroKey, calorieGoalMode)
+      : 'Met goal (macro color)';
+  const unmetLabel =
+    macroKey && calorieGoalMode
+      ? macroGoalUnmetLegendLabel(macroKey, calorieGoalMode)
+      : 'Did not meet goal';
+
+  return (
+    <div
+      className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-light)] ${className ?? ''}`}
+    >
+      <span className="flex items-center gap-1">
+        <MetIcon
+          className="h-3.5 w-3.5 shrink-0"
+          style={metColor ? {color: metColor} : {color: 'var(--color-accent)'}}
+          strokeWidth={3}
+          aria-hidden
+        />
+        {metLabel}
+      </span>
+      <span className="flex items-center gap-1">
+        <UnmetIcon className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={3} aria-hidden />
+        {unmetLabel}
+      </span>
+    </div>
+  );
+}
+
 function MacroProgressWheel({
   macroKey,
   current,
@@ -166,10 +227,9 @@ function MacroProgressWheel({
   const c = 2 * Math.PI * r;
   const offset = c * (1 - arcRatio);
   const ringColor = macroRingColor(macroKey, current, goal, calorieGoalMode);
-  const status = macroRingStatus(macroKey, current, goal, calorieGoalMode);
+  const met = macroGoalMet(macroKey, current, goal, calorieGoalMode);
   const label = macroGoalFieldLabel(macroKey);
-  const statusText =
-    status === 'good' ? 'on track' : status === 'bad' ? 'over limit or off plan' : 'in progress';
+  const statusText = met ? 'goal met' : 'goal not met';
 
   return (
     <div
@@ -253,7 +313,7 @@ function MacroCalendar({
     else setViewMonth(viewMonth + 1);
   };
 
-  const getDayData = (day: number): 'good' | 'bad' | null => {
+  const getDayData = (day: number): {status: 'met' | 'unmet'; total: number} | null => {
     const key = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     let entry: MacroTotals | undefined;
     if (key === todayKey) {
@@ -263,8 +323,11 @@ function MacroCalendar({
     }
     if (!entry) return null;
     const total = entry[selectedMacro];
-    if (total === 0 && key !== todayKey) return null;
-    return macroDayIndicator(selectedMacro, total, goals[selectedMacro], calorieGoalMode);
+    if (total <= 0) return null;
+    const goal = goals[selectedMacro];
+    const status = macroDayIndicator(selectedMacro, total, goal, calorieGoalMode);
+    if (!status) return null;
+    return {status, total};
   };
 
   const isToday = (day: number) => {
@@ -341,8 +404,25 @@ function MacroCalendar({
 
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
-            const status = getDayData(day);
+            const dayData = getDayData(day);
             const today = isToday(day);
+            const goal = goals[selectedMacro];
+            const metChevron =
+              dayData?.status === 'met'
+                ? macroIndicatorChevron(selectedMacro, calorieGoalMode, 'met', dayData.total, goal)
+                : null;
+            const unmetChevron =
+              dayData?.status === 'unmet'
+                ? macroIndicatorChevron(
+                    selectedMacro,
+                    calorieGoalMode,
+                    'unmet',
+                    dayData.total,
+                    goal,
+                  )
+                : null;
+            const MetIcon = metChevron === 'down' ? ChevronDown : ChevronUp;
+            const UnmetIcon = unmetChevron === 'down' ? ChevronDown : ChevronUp;
             return (
               <div
                 key={day}
@@ -352,28 +432,23 @@ function MacroCalendar({
                 <span className={`text-xs tabular-nums ${today ? 'font-bold text-fg' : 'text-[var(--color-text-light)]'}`}>
                   {day}
                 </span>
-                {status === 'good' && (
-                  <ChevronUp className="h-4 w-4 text-[#34d399]" strokeWidth={3} />
+                {dayData?.status === 'met' && (
+                  <MetIcon className="h-4 w-4" style={{color: macroColor}} strokeWidth={3} />
                 )}
-                {status === 'bad' && (
-                  <ChevronDown className="h-4 w-4 text-[#f87171]" strokeWidth={3} />
+                {dayData?.status === 'unmet' && (
+                  <UnmetIcon className="h-4 w-4 text-white" strokeWidth={3} />
                 )}
-                {status === null && (
-                  <div className="h-4 w-4" />
-                )}
+                {!dayData && <div className="h-4 w-4" />}
               </div>
             );
           })}
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[var(--color-text-light)]">
-          <span className="flex items-center gap-1">
-            <ChevronUp className="h-3.5 w-3.5" style={{ color: macroColor }} strokeWidth={3} /> Above target
-          </span>
-          <span className="flex items-center gap-1">
-            <ChevronDown className="h-3.5 w-3.5 text-[var(--color-text-light)]" strokeWidth={3} /> Below target
-          </span>
-        </div>
+        <MacroGoalLegend
+          className="mt-4"
+          macroKey={selectedMacro}
+          calorieGoalMode={calorieGoalMode}
+        />
       </div>
     </div>
   );
@@ -522,7 +597,7 @@ function WeightSection({
             </button>
             <button
               type="button"
-              className="rounded-lg p-1.5 text-[var(--color-accent)] transition hover:bg-[var(--color-surface)]"
+              className="rounded-lg p-1.5 text-fg transition hover:bg-[var(--color-surface)]"
               onClick={() => setLogModalOpen(true)}
               aria-label="Log weight"
             >
@@ -874,6 +949,11 @@ export default function App() {
     setWeightLog,
   );
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
+  const [goalsModalBaseline, setGoalsModalBaseline] = useState<{
+    goals: typeof goals;
+    weightGoal: number;
+    calorieGoalMode: CalorieGoalMode;
+  } | null>(null);
   /** Raw text while editing weight goal in Set goals modal (decimals like "165.") */
   const [weightGoalFieldDraft, setWeightGoalFieldDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1080,8 +1160,40 @@ export default function App() {
   }, [syncConflict]);
 
   useEffect(() => {
-    if (isGoalsModalOpen) setWeightGoalFieldDraft(null);
+    if (isGoalsModalOpen) {
+      setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode});
+      setWeightGoalFieldDraft(null);
+    } else {
+      setGoalsModalBaseline(null);
+    }
   }, [isGoalsModalOpen]);
+
+  const goalsModalDirty = useMemo(() => {
+    if (!isGoalsModalOpen || !goalsModalBaseline) return false;
+    return (
+      goals.calories !== goalsModalBaseline.goals.calories ||
+      goals.protein !== goalsModalBaseline.goals.protein ||
+      goals.carbs !== goalsModalBaseline.goals.carbs ||
+      goals.fat !== goalsModalBaseline.goals.fat ||
+      weightGoal !== goalsModalBaseline.weightGoal ||
+      calorieGoalMode !== goalsModalBaseline.calorieGoalMode
+    );
+  }, [isGoalsModalOpen, goalsModalBaseline, goals, weightGoal, calorieGoalMode]);
+
+  const saveGoalsModal = () => {
+    setGoalsModalBaseline({goals: {...goals}, weightGoal, calorieGoalMode});
+    toast.success('Daily goals saved');
+  };
+
+  const closeGoalsModal = () => {
+    if (goalsModalBaseline) {
+      setGoals({...goalsModalBaseline.goals});
+      setWeightGoal(goalsModalBaseline.weightGoal);
+      setCalorieGoalMode(goalsModalBaseline.calorieGoalMode);
+    }
+    setWeightGoalFieldDraft(null);
+    setIsGoalsModalOpen(false);
+  };
 
   useEffect(() => {
     saveShowSocialOnOverview(showSocialOnOverview);
@@ -1527,8 +1639,9 @@ export default function App() {
             const periodMacros = getPeriodTotals(dailyLog, macros, totalsView);
             const periodGoals = getPeriodGoals(goals, totalsView);
             return (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-                {MACRO_ORDER.map((key) => {
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                  {MACRO_ORDER.map((key) => {
                   const value = periodMacros[key];
                   const goal = periodGoals[key];
                   const unit = key === 'calories' ? 'kcal' : 'g';
@@ -1554,7 +1667,9 @@ export default function App() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+                <MacroGoalLegend className="mt-4" />
+              </>
             );
           })()}
         </section>
@@ -2336,18 +2451,19 @@ export default function App() {
         />
       )}
       {isGoalsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 [&::-webkit-scrollbar]:hidden">
-          <div className="glass w-full max-w-md rounded-2xl border border-[var(--color-accent)]/10 p-6 shadow-lg accent-glow [&::-webkit-scrollbar]:hidden">
-            <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set daily goals</h2>
-            <div className="space-y-4 [&::-webkit-scrollbar]:hidden">
-              <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI daily goals</h3>
-                {goalsAiLoading ? (
-                  <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)]">
-                    <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
-                    <span className="text-sm text-[var(--color-text-light)]">Generating goals…</span>
-                  </div>
-                ) : (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-md py-2">
+            <div className="glass w-full rounded-2xl border border-[var(--color-accent)]/10 p-4 shadow-lg accent-glow sm:p-6">
+              <h2 className="mb-4 text-lg font-semibold text-fg brand-font">Set daily goals</h2>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-fg brand-font">AI daily goals</h3>
+                  {goalsAiLoading ? (
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-surface-deep)] py-8">
+                      <Loader2 className="h-10 w-10 text-[var(--color-accent)] animate-spin" aria-hidden />
+                      <span className="text-sm text-[var(--color-text-light)]">Generating goals…</span>
+                    </div>
+                  ) : (
                   <>
                     <textarea
                       id="goals-ai-prompt"
@@ -2420,83 +2536,101 @@ export default function App() {
                 )}
               </div>
               <div className="rounded-xl border border-[var(--color-accent)]/10 bg-[var(--color-bg-dark)] p-4">
-                <p className="mb-2 text-sm font-semibold text-fg brand-font">Calorie goal</p>
-                <p className="mb-3 text-xs leading-snug text-[var(--color-text-light)]">
-                  Controls how calorie progress is colored: stay under when losing, hit target when gaining,
-                  or stay near goal when maintaining.
-                </p>
-                <div className="inline-flex w-full rounded-full bg-[var(--color-surface)] p-0.5">
-                  {(['lose', 'maintain', 'gain'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setCalorieGoalMode(mode)}
-                      className={`min-w-0 flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:text-sm ${
-                        calorieGoalMode === mode
-                          ? 'bg-[var(--color-accent)] text-white shadow-sm'
-                          : 'text-[var(--color-text-light)] hover:text-fg'
-                      }`}
+                <h3 className="mb-3 text-sm font-semibold text-fg brand-font">Daily goals</h3>
+                <div className="space-y-4">
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-[var(--color-text-light)]">Calorie goal</p>
+                    <CalorieGoalModePill value={calorieGoalMode} onChange={setCalorieGoalMode} />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="goal-weight"
+                      className="mb-1 block text-xs font-medium text-[var(--color-text-light)]"
                     >
-                      {calorieGoalModeLabel(mode)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {Object.keys(goals).map((key) => (
-                <div key={key} className="flex items-center gap-4">
-                  <label htmlFor={`goal-${key}`} className="w-24 text-[var(--color-text-light)]">
-                    {macroGoalFieldLabel(key as MacroKey)}
-                  </label>
-                  <input
-                    id={`goal-${key}`}
-                    name={`goal_${key}`}
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={String(goals[key as keyof typeof goals])}
-                    onChange={(e) =>
+                      Weight goal
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="flex min-w-0 flex-1 items-center rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-surface)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]">
+                        <input
+                          id="goal-weight"
+                          name="goal_weight"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder={profileWeightUnit === 'lb' ? 'e.g. 165' : 'e.g. 75'}
+                          value={
+                            weightGoalFieldDraft !== null
+                              ? weightGoalFieldDraft
+                              : weightGoal > 0
+                                ? formatMacroAmount(weightFromLb(weightGoal, profileWeightUnit))
+                                : ''
+                          }
+                          onChange={(e) => {
+                            const s = sanitizeMacroAmountRaw(e.target.value);
+                            setWeightGoalFieldDraft(s);
+                            setWeightGoal(weightToLb(parseMacroAmountInput(s), profileWeightUnit));
+                          }}
+                          onBlur={() => setWeightGoalFieldDraft(null)}
+                          className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm tabular-nums text-fg outline-none"
+                        />
+                      </div>
+                      <ProfileUnitSelect
+                        value={profileWeightUnit}
+                        options={WEIGHT_UNIT_OPTIONS}
+                        ariaLabel="Weight goal unit"
+                        onChange={(unit) => {
+                          if (weightGoalFieldDraft !== null) {
+                            const val = parseMacroAmountInput(weightGoalFieldDraft);
+                            if (val > 0) {
+                              setWeightGoalFieldDraft(
+                                formatMacroAmount(
+                                  weightFromLb(weightToLb(val, profileWeightUnit), unit),
+                                ),
+                              );
+                            }
+                          }
+                          if (socialEnabled) {
+                            void saveWeightUnit(unit).catch((e) =>
+                              console.error('Could not save weight unit', e),
+                            );
+                          } else {
+                            setGuestWeightUnit(unit);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <MacroInputGrid
+                    idPrefix="goal"
+                    valueForKey={(key) => String(goals[key])}
+                    onChange={(key, raw) =>
                       setGoals((prev) => ({
                         ...prev,
-                        [key]: parseGoalIntInput(e.target.value),
+                        [key]: parseGoalIntInput(raw),
                       }))
                     }
-                    className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg"
                   />
                 </div>
-              ))}
-              <div className="flex items-center gap-4">
-                <label htmlFor="goal-weight-lb" className="w-24 text-[var(--color-text-light)]">
-                  Weight goal
-                </label>
-                <input
-                  id="goal-weight-lb"
-                  name="goal_weight_lb"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="lb"
-                  value={
-                    weightGoalFieldDraft !== null
-                      ? weightGoalFieldDraft
-                      : weightGoal > 0
-                        ? formatMacroAmount(weightGoal)
-                        : ''
-                  }
-                  onChange={(e) => {
-                    const s = sanitizeMacroAmountRaw(e.target.value);
-                    setWeightGoalFieldDraft(s);
-                    setWeightGoal(parseMacroAmountInput(s));
-                  }}
-                  onBlur={() => setWeightGoalFieldDraft(null)}
-                  className="flex-1 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-surface)] p-3 focus:border-transparent focus:ring-2 focus:ring-[var(--color-accent)] text-fg tabular-nums"
-                />
               </div>
-              <button 
-                className="w-full bg-[var(--color-accent)] text-white py-3 rounded-full font-medium hover:bg-[var(--color-accent-hover)] transition"
-                onClick={() => {setIsGoalsModalOpen(false); toast.success("Daily goals saved");}}
-              >
-                Save
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 rounded-full bg-[var(--color-surface)] py-3 text-sm font-medium text-fg transition hover:bg-[var(--color-panel-hover)]"
+                  onClick={closeGoalsModal}
+                >
+                  Done
+                </button>
+                {goalsModalDirty ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full bg-[var(--color-accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
+                    onClick={saveGoalsModal}
+                  >
+                    Save
+                  </button>
+                ) : null}
+              </div>
+              </div>
             </div>
           </div>
         </div>

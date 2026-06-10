@@ -9,10 +9,8 @@ export const MACRO_RING_COLORS: Record<MacroKey, string> = {
   fat: '#f472b6',
 };
 
-const MACRO_GOOD = '#34d399';
-const MACRO_BAD = '#f87171';
-
-export type MacroRingStatus = 'good' | 'bad' | 'neutral';
+/** Progress ring fill when the goal is not met. */
+export const MACRO_RING_UNMET = '#ffffff';
 
 export function normalizeCalorieGoalMode(value: unknown): CalorieGoalMode {
   if (value === 'lose' || value === 'maintain' || value === 'gain') return value;
@@ -32,60 +30,107 @@ export function macroGoalFieldLabel(key: MacroKey): string {
   return 'Calories';
 }
 
-/** Ring color for daily macro progress wheels. */
+/** True when daily progress meets the macro goal for the current calorie mode. */
+export function macroGoalMet(
+  macroKey: MacroKey,
+  current: number,
+  goal: number,
+  calorieGoalMode: CalorieGoalMode,
+): boolean {
+  if (goal <= 0) return false;
+
+  if (macroKey === 'protein') {
+    return current >= goal;
+  }
+
+  if (macroKey === 'carbs' || macroKey === 'fat') {
+    return current <= goal;
+  }
+
+  if (calorieGoalMode === 'lose') {
+    return current <= goal;
+  }
+
+  if (calorieGoalMode === 'gain') {
+    return current >= goal;
+  }
+
+  const ratio = current / goal;
+  return ratio >= 0.95 && ratio <= 1.05;
+}
+
+/** Ring / indicator color: macro color when met, white when not. */
 export function macroRingColor(
   macroKey: MacroKey,
   current: number,
   goal: number,
   calorieGoalMode: CalorieGoalMode,
 ): string {
-  const status = macroRingStatus(macroKey, current, goal, calorieGoalMode);
-  if (status === 'good') return MACRO_GOOD;
-  if (status === 'bad') return MACRO_BAD;
-  return MACRO_RING_COLORS[macroKey];
+  return macroGoalMet(macroKey, current, goal, calorieGoalMode)
+    ? MACRO_RING_COLORS[macroKey]
+    : MACRO_RING_UNMET;
 }
 
-export function macroRingStatus(
-  macroKey: MacroKey,
-  current: number,
-  goal: number,
-  calorieGoalMode: CalorieGoalMode,
-): MacroRingStatus {
-  if (goal <= 0) return 'neutral';
-  const ratio = current / goal;
-
-  if (macroKey === 'protein') {
-    return ratio >= 1 ? 'good' : 'neutral';
-  }
-
-  if (macroKey === 'carbs' || macroKey === 'fat') {
-    return ratio >= 1 ? 'bad' : 'neutral';
-  }
-
-  if (calorieGoalMode === 'gain') {
-    return ratio >= 1 ? 'good' : 'neutral';
-  }
-
-  if (calorieGoalMode === 'lose') {
-    if (ratio > 1) return 'bad';
-    if (ratio >= 0.95 && ratio <= 1) return 'good';
-    return 'neutral';
-  }
-
-  if (ratio > 1.05) return 'bad';
-  if (ratio >= 0.95 && ratio <= 1.05) return 'good';
-  return 'neutral';
-}
-
-/** Calendar day indicator: good = on track, bad = off track, null = no signal. */
+/** Calendar day indicator: met goal, did not meet, or no signal. */
 export function macroDayIndicator(
   macroKey: MacroKey,
   total: number,
   goal: number,
   calorieGoalMode: CalorieGoalMode,
-): 'good' | 'bad' | null {
-  const status = macroRingStatus(macroKey, total, goal, calorieGoalMode);
-  if (status === 'good') return 'good';
-  if (status === 'bad') return 'bad';
-  return null;
+): 'met' | 'unmet' | null {
+  if (goal <= 0 || total <= 0) return null;
+  return macroGoalMet(macroKey, total, goal, calorieGoalMode) ? 'met' : 'unmet';
+}
+
+/** Which chevron direction to show for met vs unmet (varies by macro and calorie mode). */
+export function macroIndicatorChevron(
+  macroKey: MacroKey,
+  calorieGoalMode: CalorieGoalMode,
+  kind: 'met' | 'unmet',
+  current?: number,
+  goal?: number,
+): 'up' | 'down' {
+  const higherIsMet =
+    macroKey === 'protein' ||
+    (macroKey === 'calories' && calorieGoalMode === 'gain');
+  const lowerIsMet =
+    macroKey === 'carbs' ||
+    macroKey === 'fat' ||
+    (macroKey === 'calories' && calorieGoalMode === 'lose');
+
+  if (kind === 'met') {
+    if (lowerIsMet) return 'down';
+    if (higherIsMet) return 'up';
+    return 'up';
+  }
+
+  if (lowerIsMet) return 'up';
+  if (higherIsMet) return 'down';
+
+  if (current != null && goal != null && goal > 0) {
+    return current > goal ? 'up' : 'down';
+  }
+  return 'down';
+}
+
+export function macroGoalMetLegendLabel(
+  macroKey: MacroKey,
+  calorieGoalMode: CalorieGoalMode,
+): string {
+  if (macroKey === 'protein') return 'At or above goal';
+  if (macroKey === 'carbs' || macroKey === 'fat') return 'At or under limit';
+  if (calorieGoalMode === 'lose') return 'At or under goal';
+  if (calorieGoalMode === 'gain') return 'At or above goal';
+  return 'Near goal';
+}
+
+export function macroGoalUnmetLegendLabel(
+  macroKey: MacroKey,
+  calorieGoalMode: CalorieGoalMode,
+): string {
+  if (macroKey === 'protein') return 'Below goal';
+  if (macroKey === 'carbs' || macroKey === 'fat') return 'Over limit';
+  if (calorieGoalMode === 'lose') return 'Over goal';
+  if (calorieGoalMode === 'gain') return 'Below goal';
+  return 'Off target';
 }

@@ -9,8 +9,10 @@ export const MACRO_RING_COLORS: Record<MacroKey, string> = {
   fat: '#f472b6',
 };
 
-/** Progress ring fill when the goal is not met. */
-export const MACRO_RING_UNMET = '#ffffff';
+/** Fixed progress ring color per macro (unchanged when over or under goal). */
+export function macroProgressRingColor(macroKey: MacroKey): string {
+  return MACRO_RING_COLORS[macroKey];
+}
 
 export function normalizeCalorieGoalMode(value: unknown): CalorieGoalMode {
   if (value === 'lose' || value === 'maintain' || value === 'gain') return value;
@@ -57,18 +59,6 @@ export function macroGoalMet(
 
   const ratio = current / goal;
   return ratio >= 0.95 && ratio <= 1.05;
-}
-
-/** Ring / indicator color: macro color when met, white when not. */
-export function macroRingColor(
-  macroKey: MacroKey,
-  current: number,
-  goal: number,
-  calorieGoalMode: CalorieGoalMode,
-): string {
-  return macroGoalMet(macroKey, current, goal, calorieGoalMode)
-    ? MACRO_RING_COLORS[macroKey]
-    : MACRO_RING_UNMET;
 }
 
 /** Calendar day indicator: met goal, did not meet, or no signal. */

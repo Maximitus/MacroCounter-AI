@@ -62,7 +62,7 @@ import {
   macroGoalMetLegendLabel,
   macroGoalUnmetLegendLabel,
   macroIndicatorChevron,
-  macroRingColor,
+  macroProgressRingColor,
   normalizeCalorieGoalMode,
   type MacroKey,
 } from './macroProgress.ts';
@@ -226,7 +226,7 @@ function MacroProgressWheel({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - arcRatio);
-  const ringColor = macroRingColor(macroKey, current, goal, calorieGoalMode);
+  const ringColor = macroProgressRingColor(macroKey);
   const met = macroGoalMet(macroKey, current, goal, calorieGoalMode);
   const label = macroGoalFieldLabel(macroKey);
   const statusText = met ? 'goal met' : 'goal not met';
@@ -1668,7 +1668,6 @@ export default function App() {
                   );
                 })}
                 </div>
-                <MacroGoalLegend className="mt-4" />
               </>
             );
           })()}
